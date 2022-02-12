@@ -12,7 +12,6 @@ import spinal.lib.com.jtag.Jtag
 import spinal.lib.com.jtag.sim.JtagTcp
 import spinal.lib.com.uart.sim.{UartDecoder, UartEncoder}
 import spinal.lib.com.uart.{Apb3UartCtrl, Uart, UartCtrlGenerics, UartCtrlMemoryMappedConfig}
-import spinal.lib.graphic.RgbConfig
 import spinal.lib.io.TriStateArray
 import spinal.lib.misc.HexTools
 import spinal.lib.soc.pinsec.{PinsecTimerCtrl, PinsecTimerCtrlExternal}
@@ -30,7 +29,7 @@ object FinkaConfig{
 
   def default = {
     val config = FinkaConfig(
-      axiFrequency = 50 MHz,
+      axiFrequency = 250 MHz,
       onChipRamSize  = 4 kB,
       uartCtrlConfig = UartCtrlMemoryMappedConfig(
         uartCtrlConfig = UartCtrlGenerics(
@@ -164,13 +163,11 @@ class Finka(val config: FinkaConfig) extends Component{
   import config._
   val debug = true
   val interruptCount = 4
-  def vgaRgbConfig = RgbConfig(5,6,5)
 
   val io = new Bundle{
     //Clocks / reset
     val asyncReset = in Bool()
     val axiClk     = in Bool()
-    val vgaClk     = in Bool()
 
     //Main components IO
     val jtag       = slave(Jtag())
@@ -209,7 +206,6 @@ class Finka(val config: FinkaConfig) extends Component{
     //Create all reset used later in the design
     val systemReset  = RegNext(systemResetUnbuffered)
     val axiReset     = RegNext(systemResetUnbuffered)
-    val vgaReset     = BufferCC(axiReset)
   }
 
   val axiClockDomain = ClockDomain(
@@ -222,11 +218,6 @@ class Finka(val config: FinkaConfig) extends Component{
     clock = io.axiClk,
     reset = resetCtrl.systemReset,
     frequency = FixedFrequency(axiFrequency)
-  )
-
-  val vgaClockDomain = ClockDomain(
-    clock = io.vgaClk,
-    reset = resetCtrl.vgaReset
   )
 
   val axi = new ClockingArea(axiClockDomain) {
@@ -255,7 +246,7 @@ class Finka(val config: FinkaConfig) extends Component{
 
     val core = new Area{
       val config = VexRiscvConfig(
-        plugins = cpuPlugins += new DebugPlugin(debugClockDomain)
+        plugins = cpuPlugins += new DebugPlugin(debugClockDomain, 3/*breakpoints*/)
       )
 
       val cpu = new VexRiscv(config)
