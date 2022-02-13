@@ -1,5 +1,16 @@
-package vexriscv.demo
+// Based on Briey, but with VGA and SDRAM controller removed
+// Goal is to expose a full (non-shared) AXI4 master on the top-level.
 
+// see "axibus" for top-level IO
+// see "aximaster" for the master interface
+
+// not yet working: Full AXI4 interface
+//     val aximaster =  master(Axi4Shared(Axi4Config(32,32,4))/*.toAxi4().toFullConfig()*/)
+// gives error that it's a read-only interface when pipelining the crossbar i/f:
+//      //crossbar.readCmd.halfPipe()    >>  ctrl.readCmd
+//      //crossbar.writedCmd.halfPipe()    >>  ctrl.writeCmd
+
+package vexriscv.demo
 
 import vexriscv.plugin._
 import vexriscv._
@@ -172,7 +183,7 @@ class Finka(val config: FinkaConfig) extends Component{
     //Main components IO
     val jtag       = slave(Jtag())
 
-    val aximaster =  master(Axi4Shared(Axi4Config(32,32,4)))
+    val aximaster =  master(Axi4Shared(Axi4Config(32,32,4))/*.toAxi4().toFullConfig()*/)
     
     //Peripherals IO
     val gpioA         = master(TriStateArray(32 bits))
@@ -227,7 +238,7 @@ class Finka(val config: FinkaConfig) extends Component{
       idWidth = 4
     )
 
-    val axibus =  Axi4Shared(Axi4Config(32,32,4))
+    val axibus = Axi4Shared(Axi4Config(32, 32, 4))/*.toAxi4().toFullConfig()*/
 
     val apbBridge = Axi4SharedToApb3Bridge(
       addressWidth = 20,
@@ -291,7 +302,9 @@ class Finka(val config: FinkaConfig) extends Component{
     })
 
     axiCrossbar.addPipelining(axibus)((crossbar,ctrl) => {
-      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+      crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
+      //crossbar.readCmd.halfPipe()    >>  ctrl.readCmd
+      //crossbar.writedCmd.halfPipe()    >>  ctrl.writeCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
       crossbar.readRsp               <<  ctrl.readRsp
