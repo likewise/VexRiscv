@@ -102,6 +102,7 @@ object FinkaConfig{
           //            )
         ),
         new StaticMemoryTranslatorPlugin(
+          // 0xC0000000-0xFFFFFFFF is uncached
           ioRange      = _(31 downto 30) === 0x3
         ),
         new DecoderSimplePlugin(
@@ -284,9 +285,9 @@ class Finka(val config: FinkaConfig) extends Component{
     val axiCrossbar = Axi4CrossbarFactory()
 
     axiCrossbar.addSlaves(
-      ram.io.axi       -> (0x80000000L,   onChipRamSize),
-      axibus           -> (0xA0000000L,   1 MB),
-      apbBridge.io.axi -> (0xF0000000L,   1 MB)
+      ram.io.axi       -> (0x80000000L, onChipRamSize),
+      axibus           -> (0xC0000000L, 1 MB),
+      apbBridge.io.axi -> (0xF0000000L, 1 MB)
     )
 
     axiCrossbar.addConnections(
