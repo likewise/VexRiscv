@@ -184,7 +184,7 @@ class Finka(val config: FinkaConfig) extends Component{
     //Main components IO
     val jtag       = slave(Jtag())
 
-    val axi4master = master(Axi4(Axi4Config(32,32,4)))
+    val axi4master = master(Axi4(Axi4Config(32, 32, 1, useQos = false, useRegion = false)))
 
     //Peripherals IO
     val gpioA         = master(TriStateArray(32 bits))
@@ -239,7 +239,7 @@ class Finka(val config: FinkaConfig) extends Component{
       idWidth = 4
     )
 
-    val axibus = Axi4Shared(Axi4Config(32, 32, 4))/*.toAxi4().toFullConfig()*/
+    val axibus = Axi4Shared(Axi4Config(32, 32, 1, useQos = false, useRegion = false))
 
     val apbBridge = Axi4SharedToApb3Bridge(
       addressWidth = 20,
@@ -304,8 +304,6 @@ class Finka(val config: FinkaConfig) extends Component{
 
     axiCrossbar.addPipelining(axibus)((crossbar,ctrl) => {
       crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
-      //crossbar.readCmd.halfPipe()    >>  ctrl.readCmd
-      //crossbar.writedCmd.halfPipe()    >>  ctrl.writeCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
       crossbar.readRsp               <<  ctrl.readRsp
@@ -344,7 +342,6 @@ class Finka(val config: FinkaConfig) extends Component{
   io.axi4master     <> axi.axibus.toAxi4()
 }
 
-//DE1-SoC
 object Finka{
   def main(args: Array[String]) {
     val config = SpinalConfig()
@@ -355,7 +352,6 @@ object Finka{
   }
 }
 
-//DE1-SoC with memory init
 object FinkaWithMemoryInit{
   def main(args: Array[String]) {
     val config = SpinalConfig()
@@ -366,8 +362,6 @@ object FinkaWithMemoryInit{
     })
   }
 }
-
-
 
 import spinal.core.sim._
 object FinkaSim {
