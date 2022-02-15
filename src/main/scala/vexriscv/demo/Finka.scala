@@ -41,7 +41,7 @@ object FinkaConfig{
   def default = {
     val config = FinkaConfig(
       axiFrequency = 250 MHz,
-      onChipRamSize  = 4 kB,
+      onChipRamSize  = 64 kB,
       uartCtrlConfig = UartCtrlMemoryMappedConfig(
         uartCtrlConfig = UartCtrlGenerics(
           dataWidthMax      = 8,
