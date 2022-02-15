@@ -233,6 +233,7 @@ class Finka(val config: FinkaConfig) extends Component{
   )
 
   val axi = new ClockingArea(axiClockDomain) {
+
     val ram = Axi4SharedOnChipRam(
       dataWidth = 32,
       byteCount = onChipRamSize,
@@ -281,7 +282,6 @@ class Finka(val config: FinkaConfig) extends Component{
       }
     }
 
-
     val axiCrossbar = Axi4CrossbarFactory()
 
     axiCrossbar.addSlaves(
@@ -290,8 +290,11 @@ class Finka(val config: FinkaConfig) extends Component{
       apbBridge.io.axi -> (0xF0000000L, 1 MB)
     )
 
+    // sparse AXI4Shared crossbar
     axiCrossbar.addConnections(
+      // CPU instruction bus (read-only master) can only access RAM slave
       core.iBus       -> List(ram.io.axi),
+      // CPU data bus (read-only master) can access all slaves
       core.dBus       -> List(ram.io.axi, apbBridge.io.axi, axibus)
     )
 
@@ -315,7 +318,6 @@ class Finka(val config: FinkaConfig) extends Component{
       crossbar.writeRsp              <<  ctrl.writeRsp
       crossbar.readRsp               <<  ctrl.readRsp
     })
-
 
     axiCrossbar.addPipelining(core.dBus)((cpu,crossbar) => {
       cpu.sharedCmd             >>  crossbar.sharedCmd
