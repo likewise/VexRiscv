@@ -2,13 +2,7 @@
 // Goal is to expose a full (non-shared) AXI4 master on the top-level.
 
 // see "axibus" for top-level IO
-// see "aximaster" for the master interface
-
-// not yet working: Full AXI4 interface
-//     val aximaster =  master(Axi4Shared(Axi4Config(32,32,4))/*.toAxi4().toFullConfig()*/)
-// gives error that it's a read-only interface when pipelining the crossbar i/f:
-//      //crossbar.readCmd.halfPipe()    >>  ctrl.readCmd
-//      //crossbar.writedCmd.halfPipe()    >>  ctrl.writeCmd
+// see "axi4master" for the master interface
 
 package vexriscv.demo
 
