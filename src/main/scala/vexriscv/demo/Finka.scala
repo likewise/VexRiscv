@@ -102,7 +102,7 @@ object FinkaConfig{
           //            )
         ),
         new StaticMemoryTranslatorPlugin(
-          ioRange      = _(31 downto 28) === 0xF
+          ioRange      = _(31 downto 30) === 0x3
         ),
         new DecoderSimplePlugin(
           catchIllegalInstruction = true
@@ -183,8 +183,8 @@ class Finka(val config: FinkaConfig) extends Component{
     //Main components IO
     val jtag       = slave(Jtag())
 
-    val aximaster =  master(Axi4Shared(Axi4Config(32,32,4))/*.toAxi4().toFullConfig()*/)
-    
+    val axi4master = master(Axi4(Axi4Config(32,32,4)))
+
     //Peripherals IO
     val gpioA         = master(TriStateArray(32 bits))
     val uart          = master(Uart())
@@ -285,7 +285,7 @@ class Finka(val config: FinkaConfig) extends Component{
 
     axiCrossbar.addSlaves(
       ram.io.axi       -> (0x80000000L,   onChipRamSize),
-      axibus           -> (0x20000000L,   1 MB),
+      axibus           -> (0xA0000000L,   1 MB),
       apbBridge.io.axi -> (0xF0000000L,   1 MB)
     )
 
@@ -340,7 +340,7 @@ class Finka(val config: FinkaConfig) extends Component{
   io.gpioA          <> axi.gpioACtrl.io.gpio
   io.timerExternal  <> axi.timerCtrl.io.external
   io.uart           <> axi.uartCtrl.io.uart
-  io.aximaster      <> axi.axibus
+  io.axi4master     <> axi.axibus.toAxi4()
 }
 
 //DE1-SoC
