@@ -1,15 +1,15 @@
 // Based on Briey, but with VGA and SDRAM controller removed
 
 // Goal 1 is to expose a full (non-shared) AXI4 master on the top-level.
-// see "axibus" for the bus between crossbar and this master
-// see "axi4master" for the master interface for toplevel I/O
-// This works.
+// see "extAxiSharedBus" for the bus between crossbar and this master
+// see "extAxi4Master" for the master interface for toplevel I/O
+// This works, tested in hardware.
 
 // Goal 2 is to expose a full (non-shared) AXI4 slave on the top-level.
-// see "pcieAxiBus" for the bus between crossbar and this slave
-// see "pcieAxiSlave" for the slave interface for toplevel I/O
-// This fails.
-// [error] ASSIGNMENT OVERLAP completely the previous one of (toplevel/axi_pcieAxiBus_arw_ready :  Bool)
+// see "pcieAxiSharedBus" for the bus between crossbar and this slave
+// pcieAxiSharedBus is bridged from pcieAxi4Bus
+// see "pcieAxi4Slave" for the slave interface for toplevel I/O
+// This compiles.
 
 package vexriscv.demo
 
@@ -35,7 +35,8 @@ import scala.collection.Seq
 case class FinkaConfig(axiFrequency : HertzNumber,
                        onChipRamSize : BigInt,
                        cpuPlugins : ArrayBuffer[Plugin[VexRiscv]],
-                       uartCtrlConfig : UartCtrlMemoryMappedConfig)
+                       uartCtrlConfig : UartCtrlMemoryMappedConfig,
+                       pcieAxi4Config : Axi4Config)
 
 object FinkaConfig{
 
@@ -54,6 +55,10 @@ object FinkaConfig{
         txFifoDepth = 16,
         rxFifoDepth = 16
       ),
+      /* prot signals but no last signal - however SpinalHDL/Axi4 assumes Last for Axi4* classes */
+      pcieAxi4Config = Axi4Config(addressWidth = 32, dataWidth = 32, idWidth = 0, useId = false, useRegion = false, 
+        useBurst = false, useLock = false, useCache = false, useSize = false, useQos = false,
+        useLen = false, useLast = true/*fails otherwise*/, useResp = true, useProt = true, useStrb = false),
       cpuPlugins = ArrayBuffer(
         new PcManagerSimplePlugin(0x80000000l, false),
         //          new IBusSimplePlugin(
@@ -164,8 +169,6 @@ object FinkaConfig{
   }
 }
 
-
-
 class Finka(val config: FinkaConfig) extends Component{
 
   //Legacy constructor
@@ -185,8 +188,11 @@ class Finka(val config: FinkaConfig) extends Component{
     //Main components IO
     val jtag       = slave(Jtag())
 
-    val axi4master = master(Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false)))
-    val pcieAxiSlave = slave(Axi4(Axi4Config(32, 32, 0, useQos = false, useRegion = false)))
+    // AXI4 master towards an external AXI4 peripheral
+    val extAxi4Master = master(Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false)))
+
+    // AXI4 slave from (external) PCIe bridge
+    val pcieAxi4Slave = slave(Axi4(pcieAxi4Config))
 
     //Peripherals IO
     val gpioA         = master(TriStateArray(32 bits))
@@ -242,8 +248,10 @@ class Finka(val config: FinkaConfig) extends Component{
       idWidth = 4
     )
 
-    val axibus = Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
-    val pcieAxiBus =  Axi4Shared(Axi4Config(32, 32, 0, useQos = false, useRegion = false))
+    val extAxiSharedBus = Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+
+    val pcieAxi4Bus = Axi4(pcieAxi4Config)
+    val pcieAxiSharedBus = pcieAxi4Bus.toShared()
 
     //, useId = false, useRegion = false, 
     // useBurst = false, useLock = false, useCache = false, useSize = false, useQos = false,
@@ -293,17 +301,17 @@ class Finka(val config: FinkaConfig) extends Component{
 
     axiCrossbar.addSlaves(
       ram.io.axi       -> (0x80000000L, onChipRamSize),
-      axibus           -> (0xC0000000L, 1 MB),
+      extAxiSharedBus  -> (0xC0000000L, 1 MB),
       apbBridge.io.axi -> (0xF0000000L, 1 MB)
     )
 
     // sparse AXI4Shared crossbar
     axiCrossbar.addConnections(
       // CPU instruction bus (read-only master) can only access RAM slave
-      core.iBus       -> List(ram.io.axi),
+      core.iBus        -> List(ram.io.axi),
       // CPU data bus (read-only master) can access all slaves
-      core.dBus       -> List(ram.io.axi, apbBridge.io.axi, axibus),
-      pcieAxiBus      -> List(ram.io.axi, apbBridge.io.axi, axibus)
+      core.dBus        -> List(ram.io.axi, apbBridge.io.axi, extAxiSharedBus),
+      pcieAxiSharedBus -> List(ram.io.axi, apbBridge.io.axi, extAxiSharedBus)
     )
 
     axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar,bridge) => {
@@ -313,7 +321,7 @@ class Finka(val config: FinkaConfig) extends Component{
       crossbar.readRsp              << bridge.readRsp
     })
 
-    axiCrossbar.addPipelining(axibus)((crossbar,ctrl) => {
+    axiCrossbar.addPipelining(extAxiSharedBus)((crossbar,ctrl) => {
       crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
@@ -334,7 +342,7 @@ class Finka(val config: FinkaConfig) extends Component{
       cpu.readRsp               <-< crossbar.readRsp //Data cache directly use read responses without buffering, so pipeline it for FMax
     })
 
-    axiCrossbar.addPipelining(pcieAxiBus)((pcie,crossbar) => {
+    axiCrossbar.addPipelining(pcieAxiSharedBus)((pcie,crossbar) => {
       pcie.sharedCmd             >>  crossbar.sharedCmd
       pcie.writeData             >>  crossbar.writeData
       pcie.writeRsp              <<  crossbar.writeRsp
@@ -356,8 +364,10 @@ class Finka(val config: FinkaConfig) extends Component{
   io.gpioA          <> axi.gpioACtrl.io.gpio
   io.timerExternal  <> axi.timerCtrl.io.external
   io.uart           <> axi.uartCtrl.io.uart
-  io.axi4master     <> axi.axibus.toAxi4()
-  io.pcieAxiSlave   <> axi.pcieAxiBus.toAxi4()
+  io.extAxi4Master  <> axi.extAxiSharedBus.toAxi4()
+  io.pcieAxi4Slave  <> axi.pcieAxi4Bus
+}
+
 }
 
 object Finka{
