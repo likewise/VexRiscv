@@ -58,7 +58,7 @@ object FinkaConfig{
       /* prot signals but no last signal - however SpinalHDL/Axi4 assumes Last for Axi4* classes */
       pcieAxi4Config = Axi4Config(addressWidth = 32, dataWidth = 32, idWidth = 0, useId = false, useRegion = false, 
         useBurst = false, useLock = false, useCache = false, useSize = false, useQos = false,
-        useLen = false, useLast = true/*fails otherwise*/, useResp = true, useProt = true, useStrb = false),
+        useLen = false, useLast = true/*fails otherwise*/, useResp = true, useProt = true, useStrb = true),
       cpuPlugins = ArrayBuffer(
         new PcManagerSimplePlugin(0x80000000l, false),
         //          new IBusSimplePlugin(
