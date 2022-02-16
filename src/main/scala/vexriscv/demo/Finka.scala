@@ -368,6 +368,23 @@ class Finka(val config: FinkaConfig) extends Component{
   io.pcieAxi4Slave  <> axi.pcieAxi4Bus
 }
 
+// https://gitter.im/SpinalHDL/SpinalHDL?at=5c2297c28d31aa78b1f8c969
+object XilinxPatch {
+  def apply[T <: Component](c : T) : T = {
+    //Get the io bundle via java reflection
+    val m = c.getClass.getMethod("io")
+    val io = m.invoke(c).asInstanceOf[Bundle]
+
+    //Patch things
+    io.elements.map(_._2).foreach{
+      //case axi : AxiLite4 => AxiLite4SpecRenamer(axi)
+      case axi : Axi4 => Axi4SpecRenamer(axi)
+      case _ =>
+    }
+
+    //Builder pattern return the input argument
+    c 
+  }
 }
 
 object Finka{
@@ -375,7 +392,7 @@ object Finka{
     val config = SpinalConfig()
     config.generateVerilog({
       val toplevel = new Finka(FinkaConfig.default)
-      toplevel
+      XilinxPatch(toplevel)
     })
   }
 }
@@ -386,7 +403,7 @@ object FinkaWithMemoryInit{
     config.generateVerilog({
       val toplevel = new Finka(FinkaConfig.default)
       HexTools.initRam(toplevel.axi.ram.ram, "src/main/ressource/hex/muraxDemo.hex", 0x80000000l)
-      toplevel
+      XilinxPatch(toplevel)
     })
   }
 }
