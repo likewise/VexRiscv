@@ -1,8 +1,15 @@
 // Based on Briey, but with VGA and SDRAM controller removed
-// Goal is to expose a full (non-shared) AXI4 master on the top-level.
 
-// see "axibus" for top-level IO
-// see "axi4master" for the master interface
+// Goal 1 is to expose a full (non-shared) AXI4 master on the top-level.
+// see "axibus" for the bus between crossbar and this master
+// see "axi4master" for the master interface for toplevel I/O
+// This works.
+
+// Goal 2 is to expose a full (non-shared) AXI4 slave on the top-level.
+// see "pcieAxiBus" for the bus between crossbar and this slave
+// see "pcieAxiSlave" for the slave interface for toplevel I/O
+// This fails.
+// [error] ASSIGNMENT OVERLAP completely the previous one of (toplevel/axi_pcieAxiBus_arw_ready :  Bool)
 
 package vexriscv.demo
 
@@ -178,7 +185,8 @@ class Finka(val config: FinkaConfig) extends Component{
     //Main components IO
     val jtag       = slave(Jtag())
 
-    val axi4master = master(Axi4(Axi4Config(32, 32, 1, useQos = false, useRegion = false)))
+    val axi4master = master(Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false)))
+    val pcieAxiSlave = slave(Axi4(Axi4Config(32, 32, 0, useQos = false, useRegion = false)))
 
     //Peripherals IO
     val gpioA         = master(TriStateArray(32 bits))
@@ -234,7 +242,12 @@ class Finka(val config: FinkaConfig) extends Component{
       idWidth = 4
     )
 
-    val axibus = Axi4Shared(Axi4Config(32, 32, 1, useQos = false, useRegion = false))
+    val axibus = Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+    val pcieAxiBus =  Axi4Shared(Axi4Config(32, 32, 0, useQos = false, useRegion = false))
+
+    //, useId = false, useRegion = false, 
+    // useBurst = false, useLock = false, useCache = false, useSize = false, useQos = false,
+    // useLen = false, useLast = false, useResp = false, useProt = true, useStrb = false))
 
     val apbBridge = Axi4SharedToApb3Bridge(
       addressWidth = 20,
@@ -289,7 +302,8 @@ class Finka(val config: FinkaConfig) extends Component{
       // CPU instruction bus (read-only master) can only access RAM slave
       core.iBus       -> List(ram.io.axi),
       // CPU data bus (read-only master) can access all slaves
-      core.dBus       -> List(ram.io.axi, apbBridge.io.axi, axibus)
+      core.dBus       -> List(ram.io.axi, apbBridge.io.axi, axibus),
+      pcieAxiBus      -> List(ram.io.axi, apbBridge.io.axi, axibus)
     )
 
     axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar,bridge) => {
@@ -320,6 +334,13 @@ class Finka(val config: FinkaConfig) extends Component{
       cpu.readRsp               <-< crossbar.readRsp //Data cache directly use read responses without buffering, so pipeline it for FMax
     })
 
+    axiCrossbar.addPipelining(pcieAxiBus)((pcie,crossbar) => {
+      pcie.sharedCmd             >>  crossbar.sharedCmd
+      pcie.writeData             >>  crossbar.writeData
+      pcie.writeRsp              <<  crossbar.writeRsp
+      pcie.readRsp               <<  crossbar.readRsp
+    })
+
     axiCrossbar.build()
 
     val apbDecoder = Apb3Decoder(
@@ -336,6 +357,7 @@ class Finka(val config: FinkaConfig) extends Component{
   io.timerExternal  <> axi.timerCtrl.io.external
   io.uart           <> axi.uartCtrl.io.uart
   io.axi4master     <> axi.axibus.toAxi4()
+  io.pcieAxiSlave   <> axi.pcieAxiBus.toAxi4()
 }
 
 object Finka{
