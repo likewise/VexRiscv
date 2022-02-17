@@ -60,13 +60,13 @@ object FinkaConfig{
         useBurst = false, useLock = false, useCache = false, useSize = false, useQos = false,
         useLen = false, useLast = true/*fails otherwise*/, useResp = true, useProt = true, useStrb = true),
       cpuPlugins = ArrayBuffer(
-        new PcManagerSimplePlugin(0x80000000l, false),
+        new PcManagerSimplePlugin(0x00800000L, false),
         //          new IBusSimplePlugin(
         //            interfaceKeepData = false,
         //            catchAccessFault = true
         //          ),
         new IBusCachedPlugin(
-          resetVector = 0x80000000l,
+          resetVector = 0x00800000L,
           prediction = STATIC,
           config = InstructionCacheConfig(
             cacheSize = 4096,
@@ -108,8 +108,8 @@ object FinkaConfig{
           //            )
         ),
         new StaticMemoryTranslatorPlugin(
-          // 0xC0000000-0xFFFFFFFF is uncached
-          ioRange      = _(31 downto 30) === 0x3
+          // 0x00C00000-0x00FFFFFF is uncached
+          ioRange      = _(23 downto 22) === 0x3
         ),
         new DecoderSimplePlugin(
           catchIllegalInstruction = true
@@ -157,7 +157,7 @@ object FinkaConfig{
             mcycleAccess   = CsrAccess.NONE,
             minstretAccess = CsrAccess.NONE,
             ecallGen       = false,
-            wfiGenAsWait         = false,
+            wfiGenAsWait   = false,
             ucycleAccess   = CsrAccess.NONE,
             uinstretAccess = CsrAccess.NONE
           )
@@ -300,9 +300,9 @@ class Finka(val config: FinkaConfig) extends Component{
     val axiCrossbar = Axi4CrossbarFactory()
 
     axiCrossbar.addSlaves(
-      ram.io.axi       -> (0x80000000L, onChipRamSize),
-      extAxiSharedBus  -> (0xC0000000L, 1 MB),
-      apbBridge.io.axi -> (0xF0000000L, 1 MB)
+      ram.io.axi       -> (0x00800000L, onChipRamSize),
+      extAxiSharedBus  -> (0x00C00000L, 3 MB),
+      apbBridge.io.axi -> (0x00F00000L, 1 MB)
     )
 
     // sparse AXI4Shared crossbar
@@ -402,7 +402,7 @@ object FinkaWithMemoryInit{
     val config = SpinalConfig()
     config.generateVerilog({
       val toplevel = new Finka(FinkaConfig.default)
-      HexTools.initRam(toplevel.axi.ram.ram, "src/main/ressource/hex/muraxDemo.hex", 0x80000000l)
+      HexTools.initRam(toplevel.axi.ram.ram, "src/main/c/finka/hello_world/build/hello_world.hex", 0x00800000L)
       XilinxPatch(toplevel)
     })
   }
