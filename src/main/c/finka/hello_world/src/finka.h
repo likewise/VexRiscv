@@ -13,5 +13,6 @@
 #define TIMER_A ((Timer_Reg*)0x00F20040)
 #define TIMER_B ((Timer_Reg*)0x00F20050)
 #define UART      ((Uart_Reg*)(0x00F10000))
+#define AXI_M1      ((volatile uint32_t *)(0x00C00000))
 
 #endif /* __MURAX_H__ */
