@@ -29,11 +29,19 @@ import spinal.lib.misc.HexTools
 import spinal.lib.soc.pinsec.{PinsecTimerCtrl, PinsecTimerCtrlExternal}
 import spinal.lib.system.debugger.{JtagAxi4SharedDebugger, JtagBridge, SystemDebugger, SystemDebuggerConfig}
 
+import spinal.lib.bus.misc.SizeMapping
+import spinal.lib.bus.regif.AccessType._
+import spinal.lib.bus.regif._
+import spinal.lib.bus.regif.Document.CHeaderGenerator
+import spinal.lib.bus.regif.Document.HtmlGenerator
+import spinal.lib.bus.regif.Document.JsonGenerator
+
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.Seq
 
 case class FinkaConfig(axiFrequency : HertzNumber,
                        onChipRamSize : BigInt,
+                       /*onChipRamHexFile : String,*/
                        cpuPlugins : ArrayBuffer[Plugin[VexRiscv]],
                        uartCtrlConfig : UartCtrlMemoryMappedConfig,
                        pcieAxi4Config : Axi4Config)
@@ -181,11 +189,14 @@ class Finka(val config: FinkaConfig) extends Component{
   val interruptCount = 4
 
   val io = new Bundle{
-    //Clocks / reset
+    // Clocks / reset
     val asyncReset = in Bool()
     val axiClk     = in Bool()
 
-    //Main components IO
+    val packetClk   = in Bool()
+    val packetRst   = in Bool()
+
+    // Main components IO
     val jtag       = slave(Jtag())
 
     // AXI4 master towards an external AXI4 peripheral
@@ -194,7 +205,7 @@ class Finka(val config: FinkaConfig) extends Component{
     // AXI4 slave from (external) PCIe bridge
     val pcieAxi4Slave = slave(Axi4(pcieAxi4Config))
 
-    //Peripherals IO
+    // Peripherals IO
     val gpioA         = master(TriStateArray(32 bits))
     val uart          = master(Uart())
     val timerExternal = in(PinsecTimerCtrlExternal())
@@ -206,6 +217,11 @@ class Finka(val config: FinkaConfig) extends Component{
     config = ClockDomainConfig(
       resetKind = BOOT
     )
+  )
+
+  val packetClockDomain = ClockDomain(
+    clock = io.packetClk,
+    reset = io.packetRst
   )
 
   val resetCtrl = new ClockingArea(resetCtrlClockDomain) {
@@ -284,7 +300,7 @@ class Finka(val config: FinkaConfig) extends Component{
         case plugin : IBusSimplePlugin => iBus = plugin.iBus.toAxi4ReadOnly()
         case plugin : IBusCachedPlugin => iBus = plugin.iBus.toAxi4ReadOnly()
         case plugin : DBusSimplePlugin => dBus = plugin.dBus.toAxi4Shared()
-        case plugin : DBusCachedPlugin => dBus = plugin.dBus.toAxi4Shared(true)
+        case plugin : DBusCachedPlugin => dBus = plugin.dBus.toAxi4Shared(true/*stageCmd required (?)*/)
         case plugin : CsrPlugin        => {
           plugin.externalInterrupt := BufferCC(io.coreInterrupt)
           plugin.timerInterrupt := timerCtrl.io.interrupt
@@ -361,11 +377,35 @@ class Finka(val config: FinkaConfig) extends Component{
     )
   }
 
+  /* attempt to bring extAxiSharedBus : Axi4SharedBus from axi to packet ClockDomain */
+
+  val packet = new ClockingArea(packetClockDomain) {
+    //val packetAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+    //val packetAxi4Shared = Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+  }
+
+  val axi2packetCDC = Axi4SharedCC(Axi4Config(32, 32, 2, useQos = false, useRegion = false), axiClockDomain, packetClockDomain, 2, 2, 2, 2)
+  axi2packetCDC.io.input << axi.extAxiSharedBus
+  //  packet.packetAxi4Shared << axi2packetCDC.io.output
+  //  packet.packetAxi4Bus << packet.packetAxi4Shared.toAxi4()
+
+  // first connect Axi4CDC into packet clock domain
+  //packet.packetAxi4Bus << axi2packetCDC.io.output.toAxi4()
+  // ..and then to I/O
+  //io.extAxi4Master << packet.packetAxi4Bus
+
+  // OR... directly output a Axi4 master in packet clock domain
+  io.extAxi4Master << axi2packetCDC.io.output.toAxi4()
+
+  // in case extAxiSharedBus and io.extAxi4Master remains in axi clock domain
+  //io.extAxi4Master  <> axi.extAxiSharedBus.toAxi4()
+
   io.gpioA          <> axi.gpioACtrl.io.gpio
   io.timerExternal  <> axi.timerCtrl.io.external
   io.uart           <> axi.uartCtrl.io.uart
-  io.extAxi4Master  <> axi.extAxiSharedBus.toAxi4()
   io.pcieAxi4Slave  <> axi.pcieAxi4Bus
+
+  //noIoPrefix()
 }
 
 // https://gitter.im/SpinalHDL/SpinalHDL?at=5c2297c28d31aa78b1f8c969
@@ -403,6 +443,7 @@ object FinkaWithMemoryInit{
     config.generateVerilog({
       val toplevel = new Finka(FinkaConfig.default)
       HexTools.initRam(toplevel.axi.ram.ram, "src/main/c/finka/hello_world/build/hello_world.hex", 0x00800000L)
+      //onChipRamHexFile
       XilinxPatch(toplevel)
     })
   }
