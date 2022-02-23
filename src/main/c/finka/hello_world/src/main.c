@@ -20,11 +20,14 @@ void delay(uint32_t loops){
 }
 
 void main() {
-    
+    //println("Hello world! I am Finka.");
+	*((volatile uint32_t *)AXI_M1) = 0xbabecafeU;
+	//*((volatile uint32_t *)AXI_M1 + 1) = 0xdeadbeefU;
+	//(void)*((volatile uint32_t *)AXI_M1);
 
     GPIO_A->OUTPUT_ENABLE = 0x0000000F;
 	GPIO_A->OUTPUT = 0x00000001;
-    println("Hello world! I am Finka.");
+
     const int nleds = 8;
     const int nloops = 20000;
     timer_init(TIMER_A);
@@ -38,7 +41,7 @@ void main() {
 			delay(nloops);
 		}
     }
-		(void)*AXI_M1;
+	//	(void)*AXI_M1;
 }
 
 void irqCallback(){

@@ -211,7 +211,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val timerExternal = in(PinsecTimerCtrlExternal())
     val coreInterrupt = in Bool()
 
-    val update = out UInt(32 bits)
+    val update = out UInt(64 bits)
     val commit = out Bool()
   }
 
@@ -387,13 +387,12 @@ class Finka(val config: FinkaConfig) extends Component{
     //val packetAxi4Shared = Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
 
       val ctrl = new Axi4SlaveFactory(packetAxi4Bus)
-      val reg = Reg(UInt(32 bits)) init(0)
-      ctrl.createWriteOnly(reg, address = 0x00C00000L, bitOffset = 0)
-      //ctrl.createWriteOnly(reg, address = 4, bitOffset = 0)
+      val reg1 = ctrl.createWriteOnly(UInt(32 bits), address = 0x00C00000L, bitOffset = 0)
+      val reg2 = ctrl.createWriteOnly(UInt(32 bits), address = 0x00C00004L, bitOffset = 0)
+      val update = UInt(64 bits)
 
-      //ctrl.onWrite(4) {
-      //  reg := RegNext(reg1) // @NOTE works
-      //  reg := RegNext(reg1 ## reg2) //@TODO how to concatenate two regs easiest?
+      //ctrl.onWrite(0x00C00004L) {
+        update := reg1 @@ reg2
       //}
       val commit = ctrl.isWriting(address = 0x00C00000L)
   }
@@ -420,7 +419,7 @@ class Finka(val config: FinkaConfig) extends Component{
   io.pcieAxi4Slave  <> axi.pcieAxi4Bus
 
   io.commit := packet.commit
-  io.update := packet.reg
+  io.update := packet.update
 
   //noIoPrefix()
 }
@@ -473,7 +472,7 @@ object FinkaSim {
     //val toplevel = new Finka(FinkaConfig.default);
     //HexTools.initRam(toplevel.axi.ram.ram, "src/main/c/finka/hello_world/build/hello_world.hex", 0x00800000L)
 
-    SimConfig.allOptimisation.compile(new Finka(FinkaConfig.default)/*toplevel*/).doSim/*UntilVoid*/{dut =>
+    SimConfig.allOptimisation.withWave.compile(new Finka(FinkaConfig.default)/*toplevel*/).doSim/*UntilVoid*/{dut =>
     // .withWave
       HexTools.initRam(dut.axi.ram.ram, "src/main/c/finka/hello_world/build/hello_world.hex", 0x00800000L)
       val mainClkPeriod = (1e12/dut.config.axiFrequency.toDouble).toLong
@@ -481,8 +480,11 @@ object FinkaSim {
       val uartBaudRate = 115200
       val uartBaudPeriod = (1e12/uartBaudRate).toLong
 
-      val clockDomain = ClockDomain(dut.io.axiClk, dut.io.asyncReset)
-      clockDomain.forkStimulus(mainClkPeriod)
+      val axiClockDomain = ClockDomain(dut.io.axiClk, dut.io.asyncReset)
+      axiClockDomain.forkStimulus(mainClkPeriod)
+
+      val packetClockDomain = ClockDomain(dut.io.packetClk, dut.io.packetRst)
+      packetClockDomain.forkStimulus((1e12/322e6).toLong)
 
       val tcpJtag = JtagTcp(
         jtag = dut.io.jtag,
@@ -504,8 +506,9 @@ object FinkaSim {
       while (true) {
         if (dut.io.commit.toBoolean) {
           println("COMMIT")
+          simSuccess()
         }
-        clockDomain.waitRisingEdge()
+        packetClockDomain.waitRisingEdge()
       }
       simSuccess()
     }
