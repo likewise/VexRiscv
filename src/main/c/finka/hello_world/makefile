@@ -14,6 +14,8 @@ LIBS =
 LIBSINC = -L$(OBJDIR)
 LDSCRIPT = ./src/linker.ld
 
+OPENOCD = /opt/openocd-riscv/bin/openocd
+
 #include ../../../resources/gcc.mk
 # Set it to yes if you are using the sifive precompiled GCC pack
 SIFIVE_GCC_PACK ?= yes
@@ -73,6 +75,7 @@ endif
 RISCV_OBJCOPY = $(RISCV_PATH)/bin/$(RISCV_NAME)-objcopy
 RISCV_OBJDUMP = $(RISCV_PATH)/bin/$(RISCV_NAME)-objdump
 RISCV_CC=$(RISCV_PATH)/bin/$(RISCV_NAME)-gcc
+RISCV_GDB=$(RISCV_PATH)/bin/$(RISCV_NAME)-gdb
 
 CFLAGS +=  -MD -fstrict-volatile-bitfields -fno-strict-aliasing
 LDFLAGS +=  -nostdlib -lgcc -mcmodel=medany -nostartfiles -ffreestanding -Wl,-Bstatic,-T,$(LDSCRIPT),-Map,$(OBJDIR)/$(PROJ_NAME).map,--print-memory-usage
@@ -133,3 +136,21 @@ clean:
 clean-all : clean 
 
 .SECONDARY: $(OBJS)
+
+# Debug the program using GDB, which starts OpenOCD (0.11.0+ required) with GDB pipe
+debug: $(OBJDIR)/$(PROJ_NAME).elf
+	$(RISCV_GDB) \
+	-ex "set remotetimeout 3" \
+	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"target/murax.cfg\"" \
+	-ex "set arch riscv:rv32" \
+	-ex "set pagination off" \
+	-ex "layout split" \
+	-ex "load" \
+	-ex "echo \\n" \
+	-ex "echo >>> GDB will break at main. Type 'next' <enter> to proceed to the next C line. <<<\\n" \
+	-ex "echo \\n" \
+	-ex "break main" \
+	-ex "cont" \
+	$(OBJDIR)/$(PROJ_NAME).elf
+
+#	-ex "set remote hardware-breakpoint-limit 2" \

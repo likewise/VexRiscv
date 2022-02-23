@@ -200,7 +200,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val jtag       = slave(Jtag())
 
     // AXI4 master towards an external AXI4 peripheral
-    val extAxi4Master = master(Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false)))
+    //val extAxi4Master = master(Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false)))
 
     // AXI4 slave from (external) PCIe bridge
     val pcieAxi4Slave = slave(Axi4(pcieAxi4Config))
@@ -210,6 +210,9 @@ class Finka(val config: FinkaConfig) extends Component{
     val uart          = master(Uart())
     val timerExternal = in(PinsecTimerCtrlExternal())
     val coreInterrupt = in Bool()
+
+    val update = out UInt(32 bits)
+    val commit = out Bool()
   }
 
   val resetCtrlClockDomain = ClockDomain(
@@ -380,8 +383,19 @@ class Finka(val config: FinkaConfig) extends Component{
   /* attempt to bring extAxiSharedBus : Axi4SharedBus from axi to packet ClockDomain */
 
   val packet = new ClockingArea(packetClockDomain) {
-    //val packetAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+    val packetAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
     //val packetAxi4Shared = Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+
+      val ctrl = new Axi4SlaveFactory(packetAxi4Bus)
+      val reg = Reg(UInt(32 bits)) init(0)
+      ctrl.createWriteOnly(reg, address = 0x00C00000L, bitOffset = 0)
+      //ctrl.createWriteOnly(reg, address = 4, bitOffset = 0)
+
+      //ctrl.onWrite(4) {
+      //  reg := RegNext(reg1) // @NOTE works
+      //  reg := RegNext(reg1 ## reg2) //@TODO how to concatenate two regs easiest?
+      //}
+      val commit = ctrl.isWriting(address = 0x00C00000L)
   }
 
   val axi2packetCDC = Axi4SharedCC(Axi4Config(32, 32, 2, useQos = false, useRegion = false), axiClockDomain, packetClockDomain, 2, 2, 2, 2)
@@ -390,12 +404,12 @@ class Finka(val config: FinkaConfig) extends Component{
   //  packet.packetAxi4Bus << packet.packetAxi4Shared.toAxi4()
 
   // first connect Axi4CDC into packet clock domain
-  //packet.packetAxi4Bus << axi2packetCDC.io.output.toAxi4()
+  packet.packetAxi4Bus << axi2packetCDC.io.output.toAxi4()
   // ..and then to I/O
   //io.extAxi4Master << packet.packetAxi4Bus
 
   // OR... directly output a Axi4 master in packet clock domain
-  io.extAxi4Master << axi2packetCDC.io.output.toAxi4()
+  //io.extAxi4Master << axi2packetCDC.io.output.toAxi4()
 
   // in case extAxiSharedBus and io.extAxi4Master remains in axi clock domain
   //io.extAxi4Master  <> axi.extAxiSharedBus.toAxi4()
@@ -404,6 +418,9 @@ class Finka(val config: FinkaConfig) extends Component{
   io.timerExternal  <> axi.timerCtrl.io.external
   io.uart           <> axi.uartCtrl.io.uart
   io.pcieAxi4Slave  <> axi.pcieAxi4Bus
+
+  io.commit := packet.commit
+  io.update := packet.reg
 
   //noIoPrefix()
 }
@@ -453,7 +470,12 @@ import spinal.core.sim._
 object FinkaSim {
   def main(args: Array[String]): Unit = {
     val simSlowDown = false
-    SimConfig.allOptimisation.compile(new Finka(FinkaConfig.default)).doSimUntilVoid{dut =>
+    //val toplevel = new Finka(FinkaConfig.default);
+    //HexTools.initRam(toplevel.axi.ram.ram, "src/main/c/finka/hello_world/build/hello_world.hex", 0x00800000L)
+
+    SimConfig.allOptimisation.compile(new Finka(FinkaConfig.default)/*toplevel*/).doSim/*UntilVoid*/{dut =>
+    // .withWave
+      HexTools.initRam(dut.axi.ram.ram, "src/main/c/finka/hello_world/build/hello_world.hex", 0x00800000L)
       val mainClkPeriod = (1e12/dut.config.axiFrequency.toDouble).toLong
       val jtagClkPeriod = mainClkPeriod*4
       val uartBaudRate = 115200
@@ -478,6 +500,14 @@ object FinkaSim {
       )
 
       dut.io.coreInterrupt #= false
+
+      while (true) {
+        if (dut.io.commit.toBoolean) {
+          println("COMMIT")
+        }
+        clockDomain.waitRisingEdge()
+      }
+      simSuccess()
     }
   }
 }

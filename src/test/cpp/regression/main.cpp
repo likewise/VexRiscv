@@ -20,7 +20,7 @@
 #include <time.h>
 #include "encoding.h"
 
-#define VL_RANDOM_I_WIDTH(w) (VL_RANDOM_I() & (1l << w)-1l)
+#define VL_RANDOM_I_WIDTH(w) (VL_RANDOM_I(w) & (1l << w)-1l)
 
 using namespace std;
 
