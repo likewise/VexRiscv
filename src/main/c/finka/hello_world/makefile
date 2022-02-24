@@ -148,16 +148,16 @@ debug: $(OBJDIR)/$(PROJ_NAME).elf
 	-ex "layout split" \
 	-ex "load" \
 	-ex "echo \\n" \
-	-ex "echo >>> GDB will break at main. Type 'next' <enter> to proceed to the next C line. <<<\\n" \
 	-ex "echo \\n" \
 	-ex "break main" \
-	-ex "display/i $pc" \
-	-ex "cont" \
+	-ex "display/i $$pc" \
 	-ex "cont" \
 	$(OBJDIR)/$(PROJ_NAME).elf
+#	-ex "cont" \
 #	-ex "stepi" \
 #	-ex "stepi" \
 #	-ex "stepi" \
 #	-ex "stepi" \
+	-ex "echo >>> GDB will break at main. Type 'next' <enter> to proceed to the next C line. <<<\\n" \
 
 #	-ex "set remote hardware-breakpoint-limit 2" \

@@ -503,12 +503,17 @@ object FinkaSim {
 
       dut.io.coreInterrupt #= false
 
+      var commits_seen = 0
+      var cycles_post = 10
+
       while (true) {
         if (dut.io.commit.toBoolean) {
           println("COMMIT")
-          simSuccess()
+          commits_seen += 1
+          if (commits_seen > 4) cycles_post -= 1
         }
         packetClockDomain.waitRisingEdge()
+        if (cycles_post == 0) simSuccess()
       }
       simSuccess()
     }

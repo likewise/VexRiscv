@@ -1,0 +1,48 @@
+[*]
+[*] GTKWave Analyzer v3.3.86 (w)1999-2017 BSI
+[*] Thu Feb 24 16:04:58 2022
+[*]
+[dumpfile] "simWorkspace/Finka/test.vcd"
+[dumpfile_mtime] "Thu Feb 24 16:00:03 2022"
+[dumpfile_size] 2059485246
+[savefile] "00C000000.gtkw"
+[timestart] 14898751480
+[size] 2632 1402
+[pos] -1 -1
+*-12.000000 14898784081 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] TOP.
+[treeopen] TOP.Finka.
+[treeopen] TOP.Finka.axi2packetCDC.
+[treeopen] TOP.Finka.axi2packetCDC.io_input_arw_queue.
+[sst_width] 511
+[signals_width] 330
+[sst_expanded] 1
+[sst_vpaned_height] 424
+@22
+TOP.Finka.packet_reg1[31:0]
+TOP.Finka.packet_reg1[31:0]
+@28
+TOP.Finka.io_axiClk
+TOP.Finka.io_axiClk
+@22
+TOP.Finka.axi2packetCDC.io_input_arw_queue.io_pop_payload_addr[31:0]
+@28
+TOP.Finka.axi2packetCDC.io_input_arw_queue.io_pop_payload_id[1:0]
+@22
+TOP.Finka.axi2packetCDC.io_input_arw_queue.io_pop_payload_len[7:0]
+@28
+TOP.Finka.axi2packetCDC.io_input_arw_queue.io_pop_payload_write
+TOP.Finka.axi2packetCDC.io_input_arw_queue.io_pop_ready
+TOP.Finka.axi2packetCDC.io_input_arw_queue.io_pop_valid
+@22
+TOP.Finka.axi2packetCDC.io_input_w_queue.io_pop_payload_data[31:0]
+@28
+TOP.Finka.axi2packetCDC.io_input_w_queue.io_pop_payload_last
+@29
+TOP.Finka.axi2packetCDC.io_input_w_queue.io_pop_payload_strb[3:0]
+@28
+TOP.Finka.axi2packetCDC.io_input_w_queue.io_pop_ready
+TOP.Finka.axi2packetCDC.io_input_w_queue.io_pop_valid
+TOP.io_commit
+[pattern_trace] 1
+[pattern_trace] 0
