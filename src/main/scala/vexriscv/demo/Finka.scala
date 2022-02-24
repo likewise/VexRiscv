@@ -508,11 +508,11 @@ object FinkaSim {
 
       while (true) {
         if (dut.io.commit.toBoolean) {
-          println("COMMIT")
+          println("COMMIT #", commits_seen)
           commits_seen += 1
-          if (commits_seen > 4) cycles_post -= 1
         }
         packetClockDomain.waitRisingEdge()
+        if (commits_seen > 4) cycles_post -= 1
         if (cycles_post == 0) simSuccess()
       }
       simSuccess()

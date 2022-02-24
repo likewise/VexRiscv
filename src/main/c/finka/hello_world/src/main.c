@@ -20,13 +20,14 @@ void delay(uint32_t loops){
 }
 
 void main() {
-    //println("Hello world! I am Finka.");
+    println("Hello world! I am Finka.");
 	*((volatile uint32_t *)AXI_M1) = 0xaabbccddU;
-	*((volatile uint8_t *)AXI_M1 + 1) = (uint8_t)0x11U;
-	*((volatile uint8_t *)AXI_M1 + 2) = (uint8_t)0x22U;
-	*((volatile uint8_t *)AXI_M1 + 3) = (uint8_t)0x33U;
-	*((volatile uint8_t *)AXI_M1 + 4) = (uint8_t)0x44U;
+	*((volatile uint8_t *)AXI_M1 + 0) = (uint8_t)0x11U;
+	*((volatile uint8_t *)AXI_M1 + 1) = (uint8_t)0x22U;
+	*((volatile uint8_t *)AXI_M1 + 2) = (uint8_t)0x33U;
+	*((volatile uint8_t *)AXI_M1 + 3) = (uint8_t)0x44U;
 	*((volatile uint32_t *)AXI_M1) = 0xdeadbeefU;
+	*((volatile uint32_t *)AXI_M1 + 1) = 0x44444444U;
 	//(void)*((volatile uint32_t *)AXI_M1);
 
     GPIO_A->OUTPUT_ENABLE = 0x0000000F;

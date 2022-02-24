@@ -140,7 +140,7 @@ clean-all : clean
 # Debug the program using GDB, which starts OpenOCD (0.11.0+ required) with GDB pipe
 debug: $(OBJDIR)/$(PROJ_NAME).elf
 	$(RISCV_GDB) \
-	-ex "set remotetimeout 20" \
+	-ex "set remotetimeout 30" \
 	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
 	-ex "set arch riscv:rv32" \
 	-ex "monitor reset halt" \
@@ -150,9 +150,9 @@ debug: $(OBJDIR)/$(PROJ_NAME).elf
 	-ex "echo \\n" \
 	-ex "echo \\n" \
 	-ex "break main" \
-	-ex "display/i $$pc" \
-	-ex "cont" \
 	$(OBJDIR)/$(PROJ_NAME).elf
+#	-ex "display/i $$pc" \
+#	-ex "cont" \
 #	-ex "cont" \
 #	-ex "stepi" \
 #	-ex "stepi" \
