@@ -21,7 +21,7 @@ debug:
 
 # run in terminal #3
 waveform:
-	gtkwave -f gtkwave simWorkspace/Finka/test.vcd -a 00C00000.gtkw &
+	gtkwave -f simWorkspace/Finka/test.vcd -a 00C000000.gtkw &
 
 use_dev_spinal:
 	git show origin/dev:build.sbt > build.sbt
