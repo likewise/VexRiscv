@@ -157,7 +157,7 @@ object FinkaConfig{
             misaExtensionsInit = 66,
             misaAccess     = CsrAccess.NONE,
             mtvecAccess    = CsrAccess.NONE,
-            mtvecInit      = 0x80000020l,
+            mtvecInit      = 0x00800020l,
             mepcAccess     = CsrAccess.READ_WRITE,
             mscratchGen    = false,
             mcauseAccess   = CsrAccess.READ_ONLY,
@@ -191,10 +191,11 @@ class Finka(val config: FinkaConfig) extends Component{
   val io = new Bundle{
     // Clocks / reset
     val asyncReset = in Bool()
+
     val axiClk     = in Bool()
 
     val packetClk   = in Bool()
-    val packetRst   = in Bool()
+    //val packetRst   = in Bool()
 
     // Main components IO
     val jtag       = slave(Jtag())
@@ -222,11 +223,6 @@ class Finka(val config: FinkaConfig) extends Component{
     )
   )
 
-  val packetClockDomain = ClockDomain(
-    clock = io.packetClk,
-    reset = io.packetRst
-  )
-
   val resetCtrl = new ClockingArea(resetCtrlClockDomain) {
     val systemResetUnbuffered  = False
     //    val coreResetUnbuffered = False
@@ -245,6 +241,7 @@ class Finka(val config: FinkaConfig) extends Component{
     //Create all reset used later in the design
     val systemReset  = RegNext(systemResetUnbuffered)
     val axiReset     = RegNext(systemResetUnbuffered)
+    val packetReset  = RegNext(systemResetUnbuffered)
   }
 
   val axiClockDomain = ClockDomain(
@@ -257,6 +254,11 @@ class Finka(val config: FinkaConfig) extends Component{
     clock = io.axiClk,
     reset = resetCtrl.systemReset,
     frequency = FixedFrequency(axiFrequency)
+  )
+
+  val packetClockDomain = ClockDomain(
+    clock = io.packetClk,
+    reset = resetCtrl.packetReset /*BufferCC(resetCtrl.systemResetUnbuffered)*/
   )
 
   val axi = new ClockingArea(axiClockDomain) {
@@ -483,7 +485,7 @@ object FinkaSim {
       val axiClockDomain = ClockDomain(dut.io.axiClk, dut.io.asyncReset)
       axiClockDomain.forkStimulus(mainClkPeriod)
 
-      val packetClockDomain = ClockDomain(dut.io.packetClk, dut.io.packetRst)
+      val packetClockDomain = ClockDomain(dut.io.packetClk)
       packetClockDomain.forkStimulus((1e12/322e6).toLong)
 
       val tcpJtag = JtagTcp(

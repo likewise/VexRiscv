@@ -150,7 +150,11 @@ debug: $(OBJDIR)/$(PROJ_NAME).elf
 	-ex "echo \\n" \
 	-ex "echo \\n" \
 	-ex "break main" \
+	-ex "cont" \
+	-ex "cont" \
 	$(OBJDIR)/$(PROJ_NAME).elf
+#	-ex "cont" \
+#	-ex "cont" \
 #	-ex "display/i $$pc" \
 #	-ex "cont" \
 #	-ex "cont" \
