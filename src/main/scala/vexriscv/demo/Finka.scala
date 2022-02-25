@@ -448,22 +448,24 @@ object XilinxPatch {
 object Finka{
   def main(args: Array[String]) {
     val config = SpinalConfig()
-    config.generateVerilog({
+    val verilog = config.generateVerilog({
       val toplevel = new Finka(FinkaConfig.default)
       XilinxPatch(toplevel)
     })
+    //verilog.printPruned()
   }
 }
 
 object FinkaWithMemoryInit{
   def main(args: Array[String]) {
     val config = SpinalConfig()
-    config.generateVerilog({
+    val verilog = config.generateVerilog({
       val toplevel = new Finka(FinkaConfig.default)
       HexTools.initRam(toplevel.axi.ram.ram, "src/main/c/finka/hello_world/build/hello_world.hex", 0x00800000L)
       //onChipRamHexFile
       XilinxPatch(toplevel)
     })
+    //verilog.printPruned()
   }
 }
 
