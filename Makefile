@@ -2,17 +2,21 @@
 
 .PHONY: all debug_in_sim mrproper
 
-# run simulator, in background run batched program load and run via GDB
+# in background run batched program load and run via GDB
+# while the simulator is running
 # afterwards manually inspect waveform using "make waveform"
 debug_in_sim:
 	rm -rf sbt.log
-	make sim &
-	make sim_batch_debug
-	kill %1
+	make sim_batch_debug &
+	PIDGDB=$$!
+	make sim
+	echo $$PIDGDB
+	kill -9 $$PIDGDB
 
-# load and run via GDB in batch mode
+# load and run via GDB in batch mode, after detecting JTAG TCP
 sim_batch_debug:
 	set -e
+	# @TODO maybe do not rely on log, but on netstat -tln | grep port?
 	tail -F sbt.log | sed '/WAITING FOR TCP JTAG CONNECTION/ q' > /dev/null
 	make -C src/main/c/finka/hello_world   batch_debug    DEBUG=yes
 
@@ -30,6 +34,8 @@ sim: use_dev_spinal
 	make -j8 -C src/main/c/finka/hello_world clean
 	make -j8 -C src/main/c/finka/hello_world all DEBUG=yes
 	(sbt "runMain vexriscv.demo.FinkaSim" | tee sbt.log)
+	# @TODO this one could drive some automated tests
+	#(sbt "test:runMain vexriscv.FinkaSim" | tee sbt.log)
 
 # run in terminal #2
 # load and run via GDB in batch mode

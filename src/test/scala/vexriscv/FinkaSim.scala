@@ -28,7 +28,10 @@ object FinkaSim {
 
       val clockDomain = ClockDomain(dut.io.axiClk, dut.io.asyncReset)
       clockDomain.forkStimulus(mainClkPeriod)
-//      clockDomain.forkSimSpeedPrinter(2)
+      clockDomain.forkSimSpeedPrinter(60)
+
+      val packetClockDomain = ClockDomain(dut.io.packetClk)
+      packetClockDomain.forkStimulus((1e12/322e6).toLong)
 
       val tcpJtag = JtagTcp(
         jtag = dut.io.jtag,
