@@ -5,8 +5,10 @@
 # run simulator, in background run batched program load and run via GDB
 # afterwards manually inspect waveform using "make waveform"
 debug_in_sim:
+	rm -rf sbt.log
 	make sim &
 	make sim_batch_debug
+	kill %1
 
 # load and run via GDB in batch mode
 sim_batch_debug:
