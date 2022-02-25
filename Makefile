@@ -2,11 +2,19 @@
 
 .PHONY: all debug_in_sim mrproper
 
+# run simulator, in background run batched program load and run via GDB
+# afterwards manually inspect waveform using "make waveform"
 debug_in_sim:
 	make sim &
-	sleep 1
-	make debug
+	make sim_batch_debug
 
+# load and run via GDB in batch mode
+sim_batch_debug:
+	set -e
+	tail -F sbt.log | sed '/WAITING FOR TCP JTAG CONNECTION/ q' > /dev/null
+	make -C src/main/c/finka/hello_world   batch_debug    DEBUG=yes
+
+# build program for SoC, and RTL of SoC
 all:
 	set -e
 	make -j8 -C src/main/c/finka/hello_world clean
@@ -22,9 +30,9 @@ sim: use_dev_spinal
 	(sbt "runMain vexriscv.demo.FinkaSim" | tee sbt.log)
 
 # run in terminal #2
+# load and run via GDB in batch mode
 debug:
 	set -e
-	#make -j8 -C src/main/c/finka/hello_world all DEBUG=yes
 	tail -F sbt.log | sed '/WAITING FOR TCP JTAG CONNECTION/ q' > /dev/null
 	make -C src/main/c/finka/hello_world   debug    DEBUG=yes
 
@@ -39,9 +47,6 @@ use_dev_spinal:
 
 use_upstream_spinal:
 	git checkout build.sbt
-
-debug2:
-	grep 'WAITING FOR TCP JTAG CONNECTION' sbt.log && make -C src/main/c/finka/hello_world debug2 DEBUG=yes
 
 rtl:
 	sbt "runMain vexriscv.demo.FinkaWithMemoryInit"

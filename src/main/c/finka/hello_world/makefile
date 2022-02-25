@@ -137,9 +137,9 @@ clean-all : clean
 
 .SECONDARY: $(OBJS)
 
-# Debug the program using GDB, which starts OpenOCD (0.11.0+ required) with GDB pipe
+# Debug the program using GDB, which starts OpenOCD ((VexRiscv) with GDB pipe
 debug: $(OBJDIR)/$(PROJ_NAME).elf
-	$(RISCV_GDB) \
+	$(RISCV_GDB) --batch \
 	-ex "set remotetimeout 30" \
 	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
 	-ex "set arch riscv:rv32" \
@@ -153,6 +153,11 @@ debug: $(OBJDIR)/$(PROJ_NAME).elf
 	-ex "cont" \
 	-ex "cont" \
 	$(OBJDIR)/$(PROJ_NAME).elf
+
+#	-ex "cont" \
+#	-ex "cont" \
+#	-ex "quit" \
+
 #	-ex "cont" \
 #	-ex "cont" \
 #	-ex "display/i $$pc" \
@@ -165,3 +170,15 @@ debug: $(OBJDIR)/$(PROJ_NAME).elf
 	-ex "echo >>> GDB will break at main. Type 'next' <enter> to proceed to the next C line. <<<\\n" \
 
 #	-ex "set remote hardware-breakpoint-limit 2" \
+
+# Debug the program using GDB, which starts OpenOCD (VexRiscv) with GDB pipe
+batch_debug: $(OBJDIR)/$(PROJ_NAME).elf
+	$(RISCV_GDB) --batch \
+	-ex "set remotetimeout 30" \
+	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
+	-ex "set arch riscv:rv32" \
+	-ex "monitor reset halt" \
+	-ex "set pagination off" \
+	-ex "load" \
+	-ex "cont" \
+	$(OBJDIR)/$(PROJ_NAME).elf
