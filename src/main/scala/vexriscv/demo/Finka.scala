@@ -41,7 +41,7 @@ import scala.collection.Seq
 
 case class FinkaConfig(axiFrequency : HertzNumber,
                        onChipRamSize : BigInt,
-                       /*onChipRamHexFile : String,*/
+                       onChipRamHexFile : String,
                        cpuPlugins : ArrayBuffer[Plugin[VexRiscv]],
                        uartCtrlConfig : UartCtrlMemoryMappedConfig,
                        pcieAxi4Config : Axi4Config)
@@ -51,7 +51,8 @@ object FinkaConfig{
   def default = {
     val config = FinkaConfig(
       axiFrequency = 250 MHz,
-      onChipRamSize  = 64 kB,
+      onChipRamSize = 64 kB,
+      onChipRamHexFile = null, //"src/main/c/finka/hello_world/build/hello_world.hex",
       uartCtrlConfig = UartCtrlMemoryMappedConfig(
         uartCtrlConfig = UartCtrlGenerics(
           dataWidthMax      = 8,
@@ -68,7 +69,7 @@ object FinkaConfig{
         useBurst = false, useLock = false, useCache = false, useSize = false, useQos = false,
         useLen = false, useLast = true/*fails otherwise*/, useResp = true, useProt = true, useStrb = true),
       cpuPlugins = ArrayBuffer(
-        new PcManagerSimplePlugin(0x00800000L, false),
+        //new PcManagerSimplePlugin(0x00800000L, false),
         //          new IBusSimplePlugin(
         //            interfaceKeepData = false,
         //            catchAccessFault = true
@@ -180,9 +181,9 @@ object FinkaConfig{
 class Finka(val config: FinkaConfig) extends Component{
 
   //Legacy constructor
-  def this(axiFrequency: HertzNumber) {
-    this(FinkaConfig.default.copy(axiFrequency = axiFrequency))
-  }
+  //def this(axiFrequency: HertzNumber) {
+  //  this(FinkaConfig.default.copy(axiFrequency = axiFrequency))
+  //}
 
   import config._
   val debug = true
@@ -268,6 +269,13 @@ class Finka(val config: FinkaConfig) extends Component{
       byteCount = onChipRamSize,
       idWidth = 4
     )
+
+    if (config.onChipRamHexFile != null) {
+      println("Initializing Axi4SharedOnChipRam with ", config.onChipRamHexFile)
+      HexTools.initRam(ram.ram, config.onChipRamHexFile, 0x00800000L)
+    } else {
+      println("[WARNING] Axi4SharedOnChipRam is NOT initialized.")
+    }
 
     val extAxiSharedBus = Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
 
@@ -460,9 +468,8 @@ object FinkaWithMemoryInit{
   def main(args: Array[String]) {
     val config = SpinalConfig()
     val verilog = config.generateVerilog({
+      val socConfig = FinkaConfig.default.copy(onChipRamHexFile = "src/main/c/finka/hello_world/build/hello_world.hex", onChipRamSize = 64 kB)
       val toplevel = new Finka(FinkaConfig.default)
-      HexTools.initRam(toplevel.axi.ram.ram, "src/main/c/finka/hello_world/build/hello_world.hex", 0x00800000L)
-      //onChipRamHexFile
       XilinxPatch(toplevel)
     })
     //verilog.printPruned()
@@ -473,14 +480,12 @@ import spinal.core.sim._
 object FinkaSim {
   def main(args: Array[String]): Unit = {
     val simSlowDown = false
-    //val toplevel = new Finka(FinkaConfig.default);
-    //HexTools.initRam(toplevel.axi.ram.ram, "src/main/c/finka/hello_world/build/hello_world.hex", 0x00800000L)
+    val socConfig = FinkaConfig.default.copy(onChipRamHexFile = "src/main/c/finka/hello_world/build/hello_world.hex", onChipRamSize = 64 kB)
 
-    SimConfig.allOptimisation.withWave.compile(new Finka(FinkaConfig.default)/*toplevel*/).doSim/*UntilVoid*/{dut =>
+    SimConfig.allOptimisation/*.withWave*/.compile(new Finka(socConfig)/*toplevel*/).doSimUntilVoid{dut =>
     // .withWave
-      HexTools.initRam(dut.axi.ram.ram, "src/main/c/finka/hello_world/build/hello_world.hex", 0x00800000L)
       val mainClkPeriod = (1e12/dut.config.axiFrequency.toDouble).toLong
-      val jtagClkPeriod = mainClkPeriod*4
+      val jtagClkPeriod = mainClkPeriod * 4/* this must be 4 (maybe more, not less) */
       val uartBaudRate = 115200
       val uartBaudPeriod = (1e12/uartBaudRate).toLong
 
@@ -508,7 +513,8 @@ object FinkaSim {
       dut.io.coreInterrupt #= false
 
       var commits_seen = 0
-      var cycles_post = 10
+      // run 1 second after done
+      var cycles_post = 1000000
 
       while (true) {
         if (dut.io.commit.toBoolean) {

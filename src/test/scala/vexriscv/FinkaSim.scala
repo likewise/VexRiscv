@@ -17,12 +17,16 @@ import scala.collection.mutable
 
 object FinkaSim {
   def main(args: Array[String]): Unit = {
-    def config = FinkaConfig.default.copy(/*onChipRamSize = 4 kB*/)
+    def config = FinkaConfig.default.copy(
+      /*onChipRamHexFile = "src/main/c/finka/hello_world/build/hello_world.hex",*/
+      onChipRamSize = 64 kB
+    )
     val simSlowDown = false
     SimConfig.allOptimisation.compile(new Finka(config)).doSimUntilVoid{dut =>
+
       /* mainClk is the axi clock */
       val mainClkPeriod = (1e12/dut.config.axiFrequency.toDouble).toLong
-      val jtagClkPeriod = mainClkPeriod*4
+      val jtagClkPeriod = mainClkPeriod * 4/* this must be 4 (maybe more, not less) */
       val uartBaudRate = 115200
       val uartBaudPeriod = (1e12/uartBaudRate).toLong
 
@@ -47,6 +51,20 @@ object FinkaSim {
         uartPin = dut.io.uart.rxd,
         baudPeriod = uartBaudPeriod
       )
+
+      dut.io.coreInterrupt #= false
+
+      //val timerThread = fork{
+      //  var counter = 0;
+      //  while (true) {
+      //    val counter_overflow = (counter == dut.config.axiFrequency.toInt)
+      //    dut.io.timerExternal.tick #= counter_overflow
+      //    if (counter_overflow) {
+      //      counter == 0
+      //    }
+      //    counter += 1
+      //  }
+      //}
 
       val guiThread = fork{
         val guiToSim = mutable.Queue[Any]()
@@ -77,7 +95,6 @@ object FinkaSim {
           setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE)
           pack()
           setVisible(true)
-
         }
 
         //Fast refresh
@@ -87,7 +104,7 @@ object FinkaSim {
 
         //Slow refresh
         while(true){
-          sleep(mainClkPeriod*50000)
+          sleep(mainClkPeriod*500000)
 
           val dummy = if(guiToSim.nonEmpty){
             val request = guiToSim.dequeue()

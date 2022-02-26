@@ -139,7 +139,7 @@ clean-all : clean
 
 # Debug the program using GDB, which starts OpenOCD ((VexRiscv) with GDB pipe
 debug: $(OBJDIR)/$(PROJ_NAME).elf
-	$(RISCV_GDB) --batch \
+	$(RISCV_GDB) \
 	-ex "set remotetimeout 30" \
 	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
 	-ex "set arch riscv:rv32" \
@@ -150,10 +150,11 @@ debug: $(OBJDIR)/$(PROJ_NAME).elf
 	-ex "echo \\n" \
 	-ex "echo \\n" \
 	-ex "break main" \
-	-ex "cont" \
-	-ex "cont" \
+	-ex "x/4i 0x800000" \
 	$(OBJDIR)/$(PROJ_NAME).elf
 
+#	-ex "cont" \
+#	-ex "cont" \
 #	-ex "cont" \
 #	-ex "cont" \
 #	-ex "quit" \
@@ -180,5 +181,30 @@ batch_debug: $(OBJDIR)/$(PROJ_NAME).elf
 	-ex "monitor reset halt" \
 	-ex "set pagination off" \
 	-ex "load" \
+	-ex "x/4i 0x800000" \
 	-ex "cont" \
 	$(OBJDIR)/$(PROJ_NAME).elf
+
+upload: $(OBJDIR)/$(PROJ_NAME).elf
+	$(RISCV_GDB) --batch \
+	-ex "set remotetimeout 30" \
+	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
+	-ex "set arch riscv:rv32" \
+	-ex "monitor reset halt" \
+	-ex "set pagination off" \
+	-ex "load" \
+	-ex "x/4i 0x800000" \
+	-ex "quit" \
+	$(OBJDIR)/$(PROJ_NAME).elf
+
+# Debug the program using GDB, which starts OpenOCD ((VexRiscv) with GDB pipe
+attach: $(OBJDIR)/$(PROJ_NAME).elf
+	$(RISCV_GDB) \
+	-ex "set remotetimeout 30" \
+	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
+	-ex "set arch riscv:rv32" \
+	-ex "monitor reset halt" \
+	$(OBJDIR)/$(PROJ_NAME).elf
+
+openocd:
+	$(OPENOCD) -c "set MURAX_CPU0_YAML ../../../../../cpu0.yaml" -f interface/jtag_tcp.cfg -f ./finka.cfg

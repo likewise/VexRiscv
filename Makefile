@@ -33,9 +33,9 @@ sim: use_dev_spinal
 	rm -rf sbt.log
 	make -j8 -C src/main/c/finka/hello_world clean
 	make -j8 -C src/main/c/finka/hello_world all DEBUG=yes
-	(sbt "runMain vexriscv.demo.FinkaSim" | tee sbt.log)
+	#(sbt "runMain vexriscv.demo.FinkaSim" | tee sbt.log)
 	# @TODO this one could drive some automated tests
-	#(sbt "test:runMain vexriscv.FinkaSim" | tee sbt.log)
+	(sbt "test:runMain vexriscv.FinkaSim" | tee sbt.log)
 
 # run in terminal #2
 # load and run via GDB in batch mode
