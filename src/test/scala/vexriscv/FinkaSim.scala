@@ -18,8 +18,8 @@ import scala.collection.mutable
 object FinkaSim {
   def main(args: Array[String]): Unit = {
     def config = FinkaConfig.default.copy(
-      /*onChipRamHexFile = "src/main/c/finka/hello_world/build/hello_world.hex",*/
-      onChipRamSize = 64 kB
+      onChipRamSize = 64 kB,
+      onChipRamHexFile = "src/main/c/finka/hello_world/build/hello_world.hex"
     )
     val simSlowDown = false
     SimConfig.allOptimisation.compile(new Finka(config)).doSimUntilVoid{dut =>
@@ -120,7 +120,16 @@ object FinkaSim {
           ledsFrame.repaint()
           if(simSlowDown) Thread.sleep(400)
         }
-      }
+      } // fork guiThread
+
+      val commitThread = fork{
+        while (true) {
+          if (dut.io.commit.toBoolean) {
+            println("COMMIT #")
+          }
+          packetClockDomain.waitRisingEdge()
+        }
+      } // fork
     }
   }
 }

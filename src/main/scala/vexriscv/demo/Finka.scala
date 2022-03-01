@@ -480,10 +480,15 @@ import spinal.core.sim._
 object FinkaSim {
   def main(args: Array[String]): Unit = {
     val simSlowDown = false
-    val socConfig = FinkaConfig.default.copy(onChipRamHexFile = "src/main/c/finka/hello_world/build/hello_world.hex", onChipRamSize = 64 kB)
+    val socConfig = FinkaConfig.default.copy(
+      onChipRamSize = 64 kB,
+      onChipRamHexFile = "src/main/c/finka/hello_world/build/hello_world.hex"
+    )
 
-    SimConfig.allOptimisation/*.withWave*/.compile(new Finka(socConfig)/*toplevel*/).doSimUntilVoid{dut =>
-    // .withWave
+    val simConfig = SimConfig.allOptimisation.withWave
+
+    /*SimConfig.allOptimisation*/simConfig.compile(new Finka(socConfig)/*toplevel*/).doSimUntilVoid{dut =>
+      // SimConfig.allOptimisation.withWave.compile
       val mainClkPeriod = (1e12/dut.config.axiFrequency.toDouble).toLong
       val jtagClkPeriod = mainClkPeriod * 4/* this must be 4 (maybe more, not less) */
       val uartBaudRate = 115200
