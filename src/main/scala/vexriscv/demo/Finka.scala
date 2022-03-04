@@ -23,6 +23,8 @@ import spinal.lib.bus.amba4.axi._
 import spinal.lib.com.jtag.Jtag
 import spinal.lib.com.jtag.sim.JtagTcp
 import spinal.lib.com.uart.sim.{UartDecoder, UartEncoder}
+import spinal.core.sim.{SimPublic, TracingOff}
+
 import spinal.lib.com.uart.{Apb3UartCtrl, Uart, UartCtrlGenerics, UartCtrlMemoryMappedConfig}
 import spinal.lib.io.TriStateArray
 import spinal.lib.misc.HexTools
@@ -394,17 +396,33 @@ class Finka(val config: FinkaConfig) extends Component{
 
   val packet = new ClockingArea(packetClockDomain) {
     val packetAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
-    //val packetAxi4Shared = Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
 
       val ctrl = new Axi4SlaveFactory(packetAxi4Bus)
-      val reg1 = ctrl.createWriteOnly(UInt(32 bits), address = 0x00C00000L, bitOffset = 0)
-      val reg2 = ctrl.createWriteOnly(UInt(32 bits), address = 0x00C00004L, bitOffset = 0)
+
+      val regs = Vec.tabulate(8)(i => ctrl.createWriteOnly(UInt(32 bits), address = 0x00C00000L + i * 4, bitOffset = 0))
+
       val update = UInt(64 bits)
 
-      //ctrl.onWrite(0x00C00004L) {
-        update := reg1 @@ reg2
-      //}
-      val commit = ctrl.isWriting(address = 0x00C00000L)
+
+      update := regs(0) @@ regs(1)
+
+      val commit = 
+        ctrl.isWriting(address = 0x00C00000L) |
+        ctrl.isWriting(address = 0x00C00004L) |
+        ctrl.isWriting(address = 0x00C00008L) |
+        ctrl.isWriting(address = 0x00C0000cL) |
+        ctrl.isWriting(address = 0x00C00010L) 
+      val committed = RegNext(commit)
+
+      val reg_idx = (ctrl.writeAddress & 0xFFF) >> 2
+
+      val tkeep = Reg(Bits(512 bits))
+      val tkeep_vec = Vec.fill(8)(Reg(Bits(4 bits)))
+      when (commit) {
+        tkeep_vec(reg_idx) := ctrl.writeByteEnable
+        tkeep(reg_idx * 4, 4 bits) := ctrl.writeByteEnable
+      }
+      val strb = RegNext(ctrl.writeByteEnable);
   }
 
   val axi2packetCDC = Axi4SharedCC(Axi4Config(32, 32, 2, useQos = false, useRegion = false), axiClockDomain, packetClockDomain, 2, 2, 2, 2)
@@ -487,7 +505,15 @@ object FinkaSim {
 
     val simConfig = SimConfig.allOptimisation.withWave
 
-    /*SimConfig.allOptimisation*/simConfig.compile(new Finka(socConfig)/*toplevel*/).doSimUntilVoid{dut =>
+    /*SimConfig.allOptimisation*/simConfig.compile{
+      val dut = new Finka(socConfig)
+      dut.packet.strb.simPublic()
+      dut.packet.reg_idx.simPublic()
+      dut.packet.regs.simPublic()
+      dut.packet.committed.simPublic()
+      dut.packet.ctrl.writeByteEnable.simPublic()
+      dut
+    }.doSimUntilVoid{dut =>
       // SimConfig.allOptimisation.withWave.compile
       val mainClkPeriod = (1e12/dut.config.axiFrequency.toDouble).toLong
       val jtagClkPeriod = mainClkPeriod * 4/* this must be 4 (maybe more, not less) */
@@ -518,13 +544,24 @@ object FinkaSim {
       dut.io.coreInterrupt #= false
 
       var commits_seen = 0
-      // run 1 second after done
-      var cycles_post = 1000000
+      // run 0.1 second after done
+      var cycles_post = 100000
 
       while (true) {
         if (dut.io.commit.toBoolean) {
           println("COMMIT #", commits_seen)
+          printf("STRB : %04d\n", dut.packet.strb.toLong.toBinaryString.toInt)
+          printf("STRB : %04d\n", dut.packet.ctrl.writeByteEnable.toLong.toBinaryString.toInt)
+          printf("REG# : %X\n", dut.packet.reg_idx.toLong)
+          //printf("REG0 : %X\n", dut.packet.regs(0).toLong)
+          //printf("REG1 : %X\n", dut.packet.regs(1).toLong)
+          //printf("UPDATE : %X\n", dut.io.update.toBigInt)
           commits_seen += 1
+        }
+        if (dut.packet.committed.toBoolean) {
+          printf("REG0 : %X\n", dut.packet.regs(0).toLong)
+          printf("REG1 : %X\n", dut.packet.regs(1).toLong)
+          printf("UPDATE : %X\n", dut.io.update.toBigInt)
         }
         packetClockDomain.waitRisingEdge()
         if (commits_seen > 4) cycles_post -= 1
