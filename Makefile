@@ -1,6 +1,6 @@
 .ONESHELL:
 
-.PHONY: all debug_in_sim mrproper
+.PHONY: rtl debug_in_sim mrproper
 
 # in background run batched program load and run via GDB
 # while the simulator is running
@@ -22,7 +22,7 @@ sim_batch_debug:
 	make -C src/main/c/finka/hello_world   batch_debug    DEBUG=yes
 
 # build program for SoC, and RTL of SoC
-all:
+rtl:
 	set -e
 	make -j8 -C src/main/c/finka/hello_world clean
 	make -j8 -C src/main/c/finka/hello_world clean all DEBUG=yes

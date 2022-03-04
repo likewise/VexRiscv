@@ -406,21 +406,42 @@ class Finka(val config: FinkaConfig) extends Component{
 
       update := regs(0) @@ regs(1)
 
+      // match a range of addresses using OR of single addresses
       val commit = 
         ctrl.isWriting(address = 0x00C00000L) |
         ctrl.isWriting(address = 0x00C00004L) |
         ctrl.isWriting(address = 0x00C00008L) |
         ctrl.isWriting(address = 0x00C0000cL) |
         ctrl.isWriting(address = 0x00C00010L) 
-      val committed = RegNext(commit)
 
-      val reg_idx = (ctrl.writeAddress & 0xFFF) >> 2
 
-      val tkeep = Reg(Bits(512 bits))
-      val tkeep_vec = Vec.fill(8)(Reg(Bits(4 bits)))
+      val stream_word = Reg(Bits(512 bits))
+      ctrl.writeMultiWord(stream_word, 0xC00020, documentation = null)
+
+      // match a range of addresses using mask
+      import spinal.lib.bus.misc.MaskMapping
+
+      def isAddressed(): Bool = {
+        val mask_mapping = MaskMapping(0xFFF000L/*64 addresses, 16 32-bit regs*/, 0xC00000L)
+        val ret = False
+        ctrl.onWritePrimitive(address = mask_mapping, false, ""){ ret := True }
+        ret
+      }
+      val commit2 = RegNext(isAddressed())
+
+      //val mask_mapping = MaskMapping(0xFFFFC0L/*64 addresses, 16 32-bit regs*/, 0xC00000L)
+      //val y = RegNext(B"0")
+      //ctrl.onWritePrimitive(address = mask_mapping, false, ""){ y := B"1" }
+
+      val committed = RegNext(commit) 
+
+      val reg_idx = ((ctrl.writeAddress & 0xFF) / 4)
+
+      val tkeep = Reg(Bits(512 / 8 bits)) init (0)
       when (commit) {
-        tkeep_vec(reg_idx) := ctrl.writeByteEnable
+        tkeep := tkeep
         tkeep(reg_idx * 4, 4 bits) := ctrl.writeByteEnable
+        //tkeep(0, ((reg_idx + 1) * 4) bits) := ctrl.writeByteEnable
       }
       val strb = RegNext(ctrl.writeByteEnable);
   }
@@ -510,6 +531,9 @@ object FinkaSim {
       dut.packet.strb.simPublic()
       dut.packet.reg_idx.simPublic()
       dut.packet.regs.simPublic()
+      dut.packet.tkeep.simPublic()
+      dut.packet.stream_word.simPublic()
+      dut.packet.commit2.simPublic()
       dut.packet.committed.simPublic()
       dut.packet.ctrl.writeByteEnable.simPublic()
       dut
@@ -557,10 +581,15 @@ object FinkaSim {
           //printf("REG1 : %X\n", dut.packet.regs(1).toLong)
           //printf("UPDATE : %X\n", dut.io.update.toBigInt)
           commits_seen += 1
+          printf("commit2 : %X\n", dut.packet.commit2.toBoolean.toInt)
+        }
+        if (dut.packet.commit2.toBoolean) {
+          printf("STREAM : %08X\n", dut.packet.stream_word.toBigInt)
         }
         if (dut.packet.committed.toBoolean) {
           printf("REG0 : %X\n", dut.packet.regs(0).toLong)
           printf("REG1 : %X\n", dut.packet.regs(1).toLong)
+          printf("TKEEP : %08X\n", dut.packet.tkeep.toBigInt)
           printf("UPDATE : %X\n", dut.io.update.toBigInt)
         }
         packetClockDomain.waitRisingEdge()

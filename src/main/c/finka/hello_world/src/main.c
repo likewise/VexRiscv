@@ -8,6 +8,16 @@ void print(const char*str){
 		str++;
 	}
 }
+
+print_int(int x) {
+	if (x >= 100) uart_write(UART, '0' + x/100);
+	x %= 100;
+	if (x >= 10) uart_write(UART, '0' + x/10);
+	x %= 10;
+	uart_write(UART, '0' + x);
+	uart_write(UART,'\n');
+}
+
 void println(const char*str){
 	print(str);
 	uart_write(UART,'\n');
@@ -29,28 +39,38 @@ Uart_Config uart_cfg = {
 void main() {
 	uart_applyConfig(UART, &uart_cfg);
     println("Hello world! I am Finka.");
-
+#if 0
 	*((volatile uint32_t *)AXI_M1) = 0xaabbccddU;
 	*((volatile uint8_t *)AXI_M1 + 0) = (uint8_t)0x11U;
 	*((volatile uint8_t *)AXI_M1 + 1) = (uint8_t)0x22U;
 	*((volatile uint8_t *)AXI_M1 + 2) = (uint8_t)0x33U;
 	*((volatile uint8_t *)AXI_M1 + 3) = (uint8_t)0x44U;
 	*((volatile uint32_t *)AXI_M1) = 0xdeadbeefU;
+	*((volatile uint32_t *)AXI_M1 + 1) = 0xbabecafeU;
+#endif
+	for (int i = 0; i < 512/32; i++) {
+		print_int(i);
+		*((volatile uint32_t *)AXI_M1 + 0x20/4 + i) = i;
+	}
 
     GPIO_A->OUTPUT_ENABLE = 0x0000000F;
 	GPIO_A->OUTPUT = 0x00000001;
 
     const int nleds = 8;
     const int nloops = 20000;
-    timer_init(TIMER_A);
+    //timer_init(TIMER_A);
     while(1){
     	for(unsigned int i=0;i<nleds-1;i++){
     		GPIO_A->OUTPUT = 1<<i;
     		delay(nloops);
+
+			print(".");
     	}
     	for(unsigned int i=0;i<nleds-1;i++){
 			GPIO_A->OUTPUT = (1<<(nleds-1))>>i;
 			delay(nloops);
+						print(".");
+
 		}
         println("Hello world! I am Finka again.");
     }
