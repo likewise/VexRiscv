@@ -47,16 +47,24 @@ void main() {
 	*((volatile uint8_t *)AXI_M1 + 3) = (uint8_t)0x44U;
 	*((volatile uint32_t *)AXI_M1) = 0xdeadbeefU;
 	*((volatile uint32_t *)AXI_M1 + 1) = 0xbabecafeU;
-#else
+#elif 0 // prefix
 	for (int i = 0; i < 7; i++) {
 		print_int(i);
 		*((volatile uint32_t *)AXI_M1 + 0x00/4 + i) = i * 0x11;
 	}
 #endif
-#if 0
-	for (int i = 0; i < 512/32; i++) {
-		print_int(i);
-		*((volatile uint32_t *)AXI_M1 + 0x20/4 + i) = i;
+#if 1 // packet
+	int len = (512/32) + 8;
+	for (int w = 0; w < len; w++) {
+		int addr = w % (512/32);
+		*((volatile uint32_t *)AXI_M1 + 0x1000/4 + addr) = w;
+		if (w == (len - 1)) {
+			// valid=1, tlast=1
+			*((volatile uint32_t *)AXI_M1 + 0x1044/4) = 1;
+		} else if (addr == ((512/32) - 1)) {
+			// valid=1, tlast=0
+			*((volatile uint32_t *)AXI_M1 + 0x1040/4) = 1;
+		}
 	}
 #endif
     GPIO_A->OUTPUT_ENABLE = 0x0000000F;

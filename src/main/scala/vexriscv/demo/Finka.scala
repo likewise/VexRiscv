@@ -288,7 +288,8 @@ class Finka(val config: FinkaConfig) extends Component{
       println("[WARNING] Axi4SharedOnChipRam is NOT initialized.")
     }
 
-    val extAxiSharedBus = Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+    val prefixAxiSharedBus = Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+    val packetAxiSharedBus = Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
 
     val pcieAxi4Bus = Axi4(pcieAxi4Config)
     val pcieAxiSharedBus = pcieAxi4Bus.toShared()
@@ -340,18 +341,20 @@ class Finka(val config: FinkaConfig) extends Component{
     val axiCrossbar = Axi4CrossbarFactory()
 
     axiCrossbar.addSlaves(
-      ram.io.axi       -> (0x00800000L, onChipRamSize),
-      extAxiSharedBus  -> (0x00C00000L, 3 MB),
-      apbBridge.io.axi -> (0x00F00000L, 1 MB)
+      ram.io.axi          -> (0x00800000L, onChipRamSize),
+      prefixAxiSharedBus  -> (0x00C00000L, 4 kB),
+      packetAxiSharedBus  -> (0x00C01000L, 4 kB),
+      apbBridge.io.axi    -> (0x00F00000L, 1 MB)
     )
 
     // sparse AXI4Shared crossbar
+    // left side master, right side List of accessible slaves
     axiCrossbar.addConnections(
       // CPU instruction bus (read-only master) can only access RAM slave
       core.iBus        -> List(ram.io.axi),
       // CPU data bus (read-only master) can access all slaves
-      core.dBus        -> List(ram.io.axi, apbBridge.io.axi, extAxiSharedBus),
-      pcieAxiSharedBus -> List(ram.io.axi, apbBridge.io.axi, extAxiSharedBus)
+      core.dBus        -> List(ram.io.axi, apbBridge.io.axi, prefixAxiSharedBus, packetAxiSharedBus),
+      pcieAxiSharedBus -> List(ram.io.axi, apbBridge.io.axi, prefixAxiSharedBus, packetAxiSharedBus)
     )
 
     axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar,bridge) => {
@@ -361,7 +364,14 @@ class Finka(val config: FinkaConfig) extends Component{
       crossbar.readRsp              << bridge.readRsp
     })
 
-    axiCrossbar.addPipelining(extAxiSharedBus)((crossbar,ctrl) => {
+    axiCrossbar.addPipelining(prefixAxiSharedBus)((crossbar,ctrl) => {
+      crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
+      crossbar.writeData            >/-> ctrl.writeData
+      crossbar.writeRsp              <<  ctrl.writeRsp
+      crossbar.readRsp               <<  ctrl.readRsp
+    })
+
+    axiCrossbar.addPipelining(packetAxiSharedBus)((crossbar,ctrl) => {
       crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
@@ -401,8 +411,6 @@ class Finka(val config: FinkaConfig) extends Component{
     )
   }
 
-  /* bring extAxiSharedBus : Axi4SharedBus from axi to packet ClockDomain */
-
   val prefix = new ClockingArea(packetClockDomain) {
     val prefixAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false/*, useStrb = false*/))
   
@@ -433,45 +441,64 @@ class Finka(val config: FinkaConfig) extends Component{
   io.do_update := prefix.do_update
 
   val packet = new ClockingArea(packetClockDomain) {
-//    val packetAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false/*, useStrb = false*/))
-//
-//    val ctrl = new Axi4SlaveFactory(packetAxi4Bus)
-//
-//    val stream_word = Reg(Bits(512 bits))
-//    ctrl.writeMultiWord(stream_word, 0xC00020, documentation = null)
-//
-//    // match a range of addresses using mask
-//    import spinal.lib.bus.misc.MaskMapping
-//
-//    def isAddressed(): Bool = {
-//      val mask_mapping = MaskMapping(0xFFF000L/*64 addresses, 16 32-bit regs*/, 0xC00000L)
-//      val ret = False
-//      ctrl.onWritePrimitive(address = mask_mapping, false, ""){ ret := True }
-//      ret
-//    }
-//    val commit2 = RegNext(isAddressed())
-//
-//    val reg_idx = ((ctrl.writeAddress & 0xFFF) / 4)
-//
-//    // set (per-byte) tkeep bits for all 32-bit registers being written
-//    val tkeep = Reg(Bits(512 / 8 bits)) init (0)
-//    when (isAddressed()) {
-//      val reg_idx = (ctrl.writeAddress - 0x20) >> 2
-//      tkeep := tkeep
-//      //printf("reg_idx = %d\n", ctrl.writeAddress.toInt);
-//      //tkeep(reg_idx * 4, 4 bits) := tkeep(reg_idx * 4, 4 bits) | ctrl.writeByteEnable
-//      tkeep(reg_idx * 4, 4 bits) := /*tkeep(reg_idx * 4, 4 bits) |*/ B"1111"
-//      //tkeep(0, ((reg_idx + 1) * 4) bits) := ctrl.writeByteEnable
-//    }
-//    val strb = RegNext(ctrl.writeByteEnable);
+    val packetAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false/*, useStrb = false*/))
+
+    val ctrl = new Axi4SlaveFactory(packetAxi4Bus)
+
+    val stream_word = Reg(Bits(512 bits))
+    ctrl.writeMultiWord(stream_word, 0xC01000, documentation = null)
+
+    // match a range of addresses using mask
+    import spinal.lib.bus.misc.MaskMapping
+
+    // writing packet word content?
+    def isAddressed(): Bool = {
+      val mask_mapping = MaskMapping(0xFFFFC0L/*64 addresses, 16 32-bit regs*/, 0xC01000L)
+      val ret = False
+      ctrl.onWritePrimitive(address = mask_mapping, false, ""){ ret := True }
+      ret
+    }
+    val commit2 = RegNext(isAddressed())
+
+    val reg_idx = ((ctrl.writeAddress & 0xFFF) / 4)
+
+    // set (per-byte) tkeep bits for all 32-bit registers being written
+    val tkeep = Reg(Bits(512 / 8 bits)) init (0)
+    when (isAddressed()) {
+      val reg_idx = (ctrl.writeAddress - 0x00) >> 2
+      tkeep := tkeep
+      //printf("reg_idx = %d\n", ctrl.writeAddress.toInt);
+      //tkeep(reg_idx * 4, 4 bits) := tkeep(reg_idx * 4, 4 bits) | ctrl.writeByteEnable
+      tkeep(reg_idx * 4, 4 bits) := /*tkeep(reg_idx * 4, 4 bits) |*/ B"1111"
+      //tkeep(0, ((reg_idx + 1) * 4) bits) := ctrl.writeByteEnable
+    }
+    //val valid = Reg(Bool) init (False)
+    val valid = Bool
+    valid := False
+    // 0x40 VALID=1, TLAST=0
+    ctrl.onWrite(0xC01040L, null){
+      valid := True
+      tkeep := 0
+      stream_word := 0
+    }
+    val tlast = Bool
+    tlast := False
+    // 0x44 VALID=1, TLAST=1
+    ctrl.onWrite(0xC01044L, null){
+      valid := True
+      tlast := True
+      tkeep := 0
+      stream_word := 0
+    }
+    val strb = RegNext(ctrl.writeByteEnable);
   }
 
-  //val axi2packetCDC = Axi4SharedCC(Axi4Config(32, 32, 2, useQos = false, useRegion = false), axiClockDomain, packetClockDomain, 2, 2, 2, 2)
-  //axi2packetCDC.io.input << axi.extAxiSharedBus
-  //packet.packetAxi4Bus << axi2packetCDC.io.output.toAxi4()
+  val axi2packetCDC = Axi4SharedCC(Axi4Config(32, 32, 2, useQos = false, useRegion = false), axiClockDomain, packetClockDomain, 2, 2, 2, 2)
+  axi2packetCDC.io.input << axi.packetAxiSharedBus
+  packet.packetAxi4Bus << axi2packetCDC.io.output.toAxi4()
 
   val axi2prefixCDC = Axi4SharedCC(Axi4Config(32, 32, 2, useQos = false, useRegion = false), axiClockDomain, packetClockDomain, 2, 2, 2, 2)
-  axi2prefixCDC.io.input << axi.extAxiSharedBus
+  axi2prefixCDC.io.input << axi.prefixAxiSharedBus
   prefix.prefixAxi4Bus << axi2prefixCDC.io.output.toAxi4()
 
   io.gpioA          <> axi.gpioACtrl.io.gpio
@@ -545,11 +572,13 @@ object FinkaSim {
       //dut.prefix.regs.simPublic()
       //dut.prefix.committed.simPublic()
 
-      //dut.packet.strb.simPublic()
-      //dut.packet.reg_idx.simPublic()
-      //dut.packet.tkeep.simPublic()
-      //dut.packet.stream_word.simPublic()
-      //dut.packet.commit2.simPublic()
+      dut.packet.strb.simPublic()
+      dut.packet.reg_idx.simPublic()
+      dut.packet.tkeep.simPublic()
+      dut.packet.stream_word.simPublic()
+      dut.packet.commit2.simPublic()
+      dut.packet.valid.simPublic()
+      dut.packet.tlast.simPublic()
       //dut.packet.ctrl.writeByteEnable.simPublic()
       dut
     }.doSimUntilVoid{dut =>
@@ -606,13 +635,20 @@ object FinkaSim {
           printf("REG5 : %X\n", dut.io.update5.toLong)
           printf("REG6 : %X\n", dut.io.update6.toLong)
         }
-//          printf("commit2 : %X\n", dut.packet.commit2.toBoolean.toInt)
+        //printf("commit2 : %X\n", dut.packet.commit2.toBoolean.toInt)
 
-//        if (dut.packet.commit2.toBoolean) {
-//          printf("REG# : %X\n", dut.packet.reg_idx.toLong)
-//          printf("STREAM : %08X\n", dut.packet.stream_word.toBigInt)
-//          printf("TKEEP : %08X\n", dut.packet.tkeep.toBigInt)
-//        }
+        if (dut.packet.commit2.toBoolean) {
+          printf("REG# : %X\n", dut.packet.reg_idx.toLong)
+          printf("STREAM : %08X\n", dut.packet.stream_word.toBigInt)
+          printf("TKEEP : %016X\n", dut.packet.tkeep.toBigInt)
+        }
+        if (dut.packet.valid.toBoolean) {
+          printf("*VALID == %d\n", dut.packet.valid.toBoolean.toInt);
+          printf("*TLAST == %d\n", dut.packet.tlast.toBoolean.toInt);
+          printf("*REG# : %X\n", dut.packet.reg_idx.toLong)
+          printf("*STREAM : %08X\n", dut.packet.stream_word.toBigInt)
+          printf("*TKEEP : %016X\n", dut.packet.tkeep.toBigInt)
+        }
         packetClockDomain.waitRisingEdge()
         if (commits_seen > 4) cycles_post -= 1
         if (cycles_post == 0) simSuccess()
