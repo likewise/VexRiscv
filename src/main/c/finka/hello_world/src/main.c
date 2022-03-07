@@ -47,12 +47,18 @@ void main() {
 	*((volatile uint8_t *)AXI_M1 + 3) = (uint8_t)0x44U;
 	*((volatile uint32_t *)AXI_M1) = 0xdeadbeefU;
 	*((volatile uint32_t *)AXI_M1 + 1) = 0xbabecafeU;
+#else
+	for (int i = 0; i < 7; i++) {
+		print_int(i);
+		*((volatile uint32_t *)AXI_M1 + 0x00/4 + i) = i * 0x11;
+	}
 #endif
+#if 0
 	for (int i = 0; i < 512/32; i++) {
 		print_int(i);
 		*((volatile uint32_t *)AXI_M1 + 0x20/4 + i) = i;
 	}
-
+#endif
     GPIO_A->OUTPUT_ENABLE = 0x0000000F;
 	GPIO_A->OUTPUT = 0x00000001;
 

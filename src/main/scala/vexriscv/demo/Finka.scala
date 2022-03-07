@@ -215,6 +215,15 @@ class Finka(val config: FinkaConfig) extends Component{
     val timerExternal = in(PinsecTimerCtrlExternal())
     val coreInterrupt = in Bool()
 
+    val update0 = out UInt(32 bits)
+    val update1 = out UInt(32 bits)
+    val update2 = out UInt(32 bits)
+    val update3 = out UInt(32 bits)
+    val update4 = out UInt(32 bits)
+    val update5 = out UInt(32 bits)
+    val update6 = out UInt(32 bits)
+    val do_update = out Bool()
+
     val update = out UInt(64 bits)
     val commit = out Bool()
   }
@@ -392,83 +401,86 @@ class Finka(val config: FinkaConfig) extends Component{
     )
   }
 
-  /* attempt to bring extAxiSharedBus : Axi4SharedBus from axi to packet ClockDomain */
+  /* bring extAxiSharedBus : Axi4SharedBus from axi to packet ClockDomain */
+
+  val prefix = new ClockingArea(packetClockDomain) {
+    val prefixAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false/*, useStrb = false*/))
+  
+    val ctrl = new Axi4SlaveFactory(prefixAxi4Bus)
+    val reg_idx = ((ctrl.writeAddress & 0xFFF) / 4)
+  
+    val regs = Vec.tabulate(7)(i => ctrl.createWriteOnly(UInt(32 bits), address = 0x00C00000L + i * 4, bitOffset = 0))
+    val update = UInt(64 bits)
+    update := regs(0) @@ regs(1)
+    // match a range of addresses using OR of single addresses
+    val commit = 
+      /*ctrl.isWriting(address = 0x00C00000L) |
+      ctrl.isWriting(address = 0x00C00004L) |
+      ctrl.isWriting(address = 0x00C00008L) |
+      ctrl.isWriting(address = 0x00C0000cL) |
+      ctrl.isWriting(address = 0x00C00010L) |
+      ctrl.isWriting(address = 0x00C00014L) |*/
+      ctrl.isWriting(address = 0x00C00018L)
+    val do_update = RegNext(commit) init (False)
+  }
+  io.update0 := prefix.regs(0)
+  io.update1 := prefix.regs(1)
+  io.update2 := prefix.regs(2)
+  io.update3 := prefix.regs(3)
+  io.update4 := prefix.regs(4)
+  io.update5 := prefix.regs(5)
+  io.update6 := prefix.regs(6)
+  io.do_update := prefix.do_update
 
   val packet = new ClockingArea(packetClockDomain) {
-    val packetAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
-
-      val ctrl = new Axi4SlaveFactory(packetAxi4Bus)
-
-      val regs = Vec.tabulate(8)(i => ctrl.createWriteOnly(UInt(32 bits), address = 0x00C00000L + i * 4, bitOffset = 0))
-
-      val update = UInt(64 bits)
-
-
-      update := regs(0) @@ regs(1)
-
-      // match a range of addresses using OR of single addresses
-      val commit = 
-        ctrl.isWriting(address = 0x00C00000L) |
-        ctrl.isWriting(address = 0x00C00004L) |
-        ctrl.isWriting(address = 0x00C00008L) |
-        ctrl.isWriting(address = 0x00C0000cL) |
-        ctrl.isWriting(address = 0x00C00010L) 
-
-
-      val stream_word = Reg(Bits(512 bits))
-      ctrl.writeMultiWord(stream_word, 0xC00020, documentation = null)
-
-      // match a range of addresses using mask
-      import spinal.lib.bus.misc.MaskMapping
-
-      def isAddressed(): Bool = {
-        val mask_mapping = MaskMapping(0xFFF000L/*64 addresses, 16 32-bit regs*/, 0xC00000L)
-        val ret = False
-        ctrl.onWritePrimitive(address = mask_mapping, false, ""){ ret := True }
-        ret
-      }
-      val commit2 = RegNext(isAddressed())
-
-      //val mask_mapping = MaskMapping(0xFFFFC0L/*64 addresses, 16 32-bit regs*/, 0xC00000L)
-      //val y = RegNext(B"0")
-      //ctrl.onWritePrimitive(address = mask_mapping, false, ""){ y := B"1" }
-
-      val committed = RegNext(commit) 
-
-      val reg_idx = ((ctrl.writeAddress & 0xFF) / 4)
-
-      val tkeep = Reg(Bits(512 / 8 bits)) init (0)
-      when (commit) {
-        tkeep := tkeep
-        tkeep(reg_idx * 4, 4 bits) := ctrl.writeByteEnable
-        //tkeep(0, ((reg_idx + 1) * 4) bits) := ctrl.writeByteEnable
-      }
-      val strb = RegNext(ctrl.writeByteEnable);
+//    val packetAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false/*, useStrb = false*/))
+//
+//    val ctrl = new Axi4SlaveFactory(packetAxi4Bus)
+//
+//    val stream_word = Reg(Bits(512 bits))
+//    ctrl.writeMultiWord(stream_word, 0xC00020, documentation = null)
+//
+//    // match a range of addresses using mask
+//    import spinal.lib.bus.misc.MaskMapping
+//
+//    def isAddressed(): Bool = {
+//      val mask_mapping = MaskMapping(0xFFF000L/*64 addresses, 16 32-bit regs*/, 0xC00000L)
+//      val ret = False
+//      ctrl.onWritePrimitive(address = mask_mapping, false, ""){ ret := True }
+//      ret
+//    }
+//    val commit2 = RegNext(isAddressed())
+//
+//    val reg_idx = ((ctrl.writeAddress & 0xFFF) / 4)
+//
+//    // set (per-byte) tkeep bits for all 32-bit registers being written
+//    val tkeep = Reg(Bits(512 / 8 bits)) init (0)
+//    when (isAddressed()) {
+//      val reg_idx = (ctrl.writeAddress - 0x20) >> 2
+//      tkeep := tkeep
+//      //printf("reg_idx = %d\n", ctrl.writeAddress.toInt);
+//      //tkeep(reg_idx * 4, 4 bits) := tkeep(reg_idx * 4, 4 bits) | ctrl.writeByteEnable
+//      tkeep(reg_idx * 4, 4 bits) := /*tkeep(reg_idx * 4, 4 bits) |*/ B"1111"
+//      //tkeep(0, ((reg_idx + 1) * 4) bits) := ctrl.writeByteEnable
+//    }
+//    val strb = RegNext(ctrl.writeByteEnable);
   }
 
-  val axi2packetCDC = Axi4SharedCC(Axi4Config(32, 32, 2, useQos = false, useRegion = false), axiClockDomain, packetClockDomain, 2, 2, 2, 2)
-  axi2packetCDC.io.input << axi.extAxiSharedBus
-  //  packet.packetAxi4Shared << axi2packetCDC.io.output
-  //  packet.packetAxi4Bus << packet.packetAxi4Shared.toAxi4()
+  //val axi2packetCDC = Axi4SharedCC(Axi4Config(32, 32, 2, useQos = false, useRegion = false), axiClockDomain, packetClockDomain, 2, 2, 2, 2)
+  //axi2packetCDC.io.input << axi.extAxiSharedBus
+  //packet.packetAxi4Bus << axi2packetCDC.io.output.toAxi4()
 
-  // first connect Axi4CDC into packet clock domain
-  packet.packetAxi4Bus << axi2packetCDC.io.output.toAxi4()
-  // ..and then to I/O
-  //io.extAxi4Master << packet.packetAxi4Bus
-
-  // OR... directly output a Axi4 master in packet clock domain
-  //io.extAxi4Master << axi2packetCDC.io.output.toAxi4()
-
-  // in case extAxiSharedBus and io.extAxi4Master remains in axi clock domain
-  //io.extAxi4Master  <> axi.extAxiSharedBus.toAxi4()
+  val axi2prefixCDC = Axi4SharedCC(Axi4Config(32, 32, 2, useQos = false, useRegion = false), axiClockDomain, packetClockDomain, 2, 2, 2, 2)
+  axi2prefixCDC.io.input << axi.extAxiSharedBus
+  prefix.prefixAxi4Bus << axi2prefixCDC.io.output.toAxi4()
 
   io.gpioA          <> axi.gpioACtrl.io.gpio
   io.timerExternal  <> axi.timerCtrl.io.external
   io.uart           <> axi.uartCtrl.io.uart
   io.pcieAxi4Slave  <> axi.pcieAxi4Bus
 
-  io.commit := packet.commit
-  io.update := packet.update
+  io.commit := prefix.commit
+  io.update := prefix.update
 
   //noIoPrefix()
 }
@@ -524,18 +536,21 @@ object FinkaSim {
       onChipRamHexFile = "src/main/c/finka/hello_world/build/hello_world.hex"
     )
 
-    val simConfig = SimConfig.allOptimisation.withWave
+    val simConfig = SimConfig.allOptimisation/*.withWave*/
 
-    /*SimConfig.allOptimisation*/simConfig.compile{
+    simConfig.compile{
       val dut = new Finka(socConfig)
-      dut.packet.strb.simPublic()
-      dut.packet.reg_idx.simPublic()
-      dut.packet.regs.simPublic()
-      dut.packet.tkeep.simPublic()
-      dut.packet.stream_word.simPublic()
-      dut.packet.commit2.simPublic()
-      dut.packet.committed.simPublic()
-      dut.packet.ctrl.writeByteEnable.simPublic()
+
+      //dut.prefix.reg_idx.simPublic()
+      //dut.prefix.regs.simPublic()
+      //dut.prefix.committed.simPublic()
+
+      //dut.packet.strb.simPublic()
+      //dut.packet.reg_idx.simPublic()
+      //dut.packet.tkeep.simPublic()
+      //dut.packet.stream_word.simPublic()
+      //dut.packet.commit2.simPublic()
+      //dut.packet.ctrl.writeByteEnable.simPublic()
       dut
     }.doSimUntilVoid{dut =>
       // SimConfig.allOptimisation.withWave.compile
@@ -571,27 +586,33 @@ object FinkaSim {
       // run 0.1 second after done
       var cycles_post = 100000
 
+      packetClockDomain.waitSampling(1)
+
       while (true) {
         if (dut.io.commit.toBoolean) {
           println("COMMIT #", commits_seen)
-          printf("STRB : %04d\n", dut.packet.strb.toLong.toBinaryString.toInt)
-          printf("STRB : %04d\n", dut.packet.ctrl.writeByteEnable.toLong.toBinaryString.toInt)
-          printf("REG# : %X\n", dut.packet.reg_idx.toLong)
-          //printf("REG0 : %X\n", dut.packet.regs(0).toLong)
-          //printf("REG1 : %X\n", dut.packet.regs(1).toLong)
+          //printf("STRB : %04d\n", dut.prefix.ctrl.writeByteEnable.toLong.toBinaryString.toInt)
+          //printf("REG# : %X\n", dut.prefix.reg_idx.toLong)
           //printf("UPDATE : %X\n", dut.io.update.toBigInt)
           commits_seen += 1
-          printf("commit2 : %X\n", dut.packet.commit2.toBoolean.toInt)
         }
-        if (dut.packet.commit2.toBoolean) {
-          printf("STREAM : %08X\n", dut.packet.stream_word.toBigInt)
+        //if (dut.prefix.committed.toBoolean) {
+        if (dut.io.do_update.toBoolean) {
+          printf("REG0 : %X\n", dut.io.update0.toLong)
+          printf("REG1 : %X\n", dut.io.update1.toLong)
+          printf("REG2 : %X\n", dut.io.update2.toLong)
+          printf("REG3 : %X\n", dut.io.update3.toLong)
+          printf("REG4 : %X\n", dut.io.update4.toLong)
+          printf("REG5 : %X\n", dut.io.update5.toLong)
+          printf("REG6 : %X\n", dut.io.update6.toLong)
         }
-        if (dut.packet.committed.toBoolean) {
-          printf("REG0 : %X\n", dut.packet.regs(0).toLong)
-          printf("REG1 : %X\n", dut.packet.regs(1).toLong)
-          printf("TKEEP : %08X\n", dut.packet.tkeep.toBigInt)
-          printf("UPDATE : %X\n", dut.io.update.toBigInt)
-        }
+//          printf("commit2 : %X\n", dut.packet.commit2.toBoolean.toInt)
+
+//        if (dut.packet.commit2.toBoolean) {
+//          printf("REG# : %X\n", dut.packet.reg_idx.toLong)
+//          printf("STREAM : %08X\n", dut.packet.stream_word.toBigInt)
+//          printf("TKEEP : %08X\n", dut.packet.tkeep.toBigInt)
+//        }
         packetClockDomain.waitRisingEdge()
         if (commits_seen > 4) cycles_post -= 1
         if (cycles_post == 0) simSuccess()
