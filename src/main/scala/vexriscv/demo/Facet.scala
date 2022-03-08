@@ -413,7 +413,7 @@ object FacetWithMemoryInit{
     val config = SpinalConfig()
     val verilog = config.generateVerilog({
       val socConfig = FacetConfig.default.copy(onChipRamHexFile = "src/main/c/facet/hello_world/build/hello_world.hex", onChipRamSize = 64 kB)
-      val toplevel = new Facet(FacetConfig.default)
+      val toplevel = new Facet(socConfig)
       FacetXilinxPatch(toplevel)
     })
   }
