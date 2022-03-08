@@ -275,6 +275,7 @@ class Finka(val config: FinkaConfig) extends Component{
 
   val axi = new ClockingArea(axiClockDomain) {
 
+    // instruction and data memory
     val ram = Axi4SharedOnChipRam(
       dataWidth = 32,
       byteCount = onChipRamSize,
@@ -364,6 +365,7 @@ class Finka(val config: FinkaConfig) extends Component{
       crossbar.readRsp              << bridge.readRsp
     })
 
+    /* prefix update slave */
     axiCrossbar.addPipelining(prefixAxiSharedBus)((crossbar,ctrl) => {
       crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
@@ -371,6 +373,7 @@ class Finka(val config: FinkaConfig) extends Component{
       crossbar.readRsp               <<  ctrl.readRsp
     })
 
+    /* packet generator slave */
     axiCrossbar.addPipelining(packetAxiSharedBus)((crossbar,ctrl) => {
       crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
@@ -385,6 +388,7 @@ class Finka(val config: FinkaConfig) extends Component{
       crossbar.readRsp               <<  ctrl.readRsp
     })
 
+    // CPU data bus master
     axiCrossbar.addPipelining(core.dBus)((cpu,crossbar) => {
       cpu.sharedCmd             >>  crossbar.sharedCmd
       cpu.writeData             >>  crossbar.writeData
@@ -392,6 +396,7 @@ class Finka(val config: FinkaConfig) extends Component{
       cpu.readRsp               <-< crossbar.readRsp //Data cache directly use read responses without buffering, so pipeline it for FMax
     })
 
+    // PCIe bus master
     axiCrossbar.addPipelining(pcieAxiSharedBus)((pcie,crossbar) => {
       pcie.sharedCmd             >>  crossbar.sharedCmd
       pcie.writeData             >>  crossbar.writeData
@@ -467,12 +472,9 @@ class Finka(val config: FinkaConfig) extends Component{
     when (isAddressed()) {
       val reg_idx = (ctrl.writeAddress - 0x00) >> 2
       tkeep := tkeep
-      //printf("reg_idx = %d\n", ctrl.writeAddress.toInt);
       //tkeep(reg_idx * 4, 4 bits) := tkeep(reg_idx * 4, 4 bits) | ctrl.writeByteEnable
-      tkeep(reg_idx * 4, 4 bits) := /*tkeep(reg_idx * 4, 4 bits) |*/ B"1111"
-      //tkeep(0, ((reg_idx + 1) * 4) bits) := ctrl.writeByteEnable
+      tkeep(reg_idx * 4, 4 bits) := B"1111"
     }
-    //val valid = Reg(Bool) init (False)
     val valid = Bool
     valid := False
     // 0x40 VALID=1, TLAST=0
