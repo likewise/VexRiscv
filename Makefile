@@ -63,6 +63,8 @@ use_upstream_spinal:
 	git checkout build.sbt
 
 rtl:
+	make -j8 -C src/main/c/facet/hello_world clean
+	make -j8 -C src/main/c/facet/hello_world all DEBUG=yes
 	sbt "runMain vexriscv.demo.FacetWithMemoryInit"
 
 mrproper:
