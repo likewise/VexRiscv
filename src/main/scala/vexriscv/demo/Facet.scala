@@ -355,9 +355,9 @@ class Facet(val config: FacetConfig) extends Component{
 
     axiCrossbar.addPipelining(pcieAxiSharedBus)((pcie,crossbar) => {
       pcie.sharedCmd             >>  crossbar.sharedCmd
-      pcie.writeData             >>  crossbar.writeData
+      pcie.writeData            >/-> crossbar.writeData
       pcie.writeRsp              <<  crossbar.writeRsp
-      pcie.readRsp               <<  crossbar.readRsp
+      pcie.readRsp              <-/< crossbar.readRsp
     })
 
     axiCrossbar.build()
